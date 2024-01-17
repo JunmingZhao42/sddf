@@ -8,7 +8,7 @@
 # doesn't actually cause a re-compile. We should fix this.
 
 BUILD_DIR ?= build
-MICROKIT_BOARD := imx8mm_evk
+MICROKIT_BOARD := maaxboard
 MICROKIT_CONFIG ?= debug
 
 ifeq ($(strip $(MICROKIT_SDK)),)
