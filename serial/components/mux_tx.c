@@ -139,13 +139,16 @@ int handle_tx(int curr_client) {
     return 0;
 }
 
-void init (void) {
-    // We want to init the client rings here. Currently this only inits one client
-    ring_init(&tx_ring[0], (ring_buffer_t *)tx_free_client, (ring_buffer_t *)tx_used_client, 0, NUM_BUFFERS, NUM_BUFFERS);
-    // @ivanv: terrible temporary hack
-#if SERIAL_NUM_CLIENTS > 1
-    ring_init(&tx_ring[1], (ring_buffer_t *)tx_free_client2, (ring_buffer_t *)tx_used_client2, 0, NUM_BUFFERS, NUM_BUFFERS);
-#endif
+void init(void) {
+    /*
+     * The only invariant this initialiation depends on is that the buffers for the other
+     * clients are consecutively allocated from the first one.
+     */
+    for (int i = 0; i < SERIAL_NUM_CLIENTS; i++) {
+        uintptr_t tx_free = tx_free_client + (i * BUFFER_SIZE * NUM_BUFFERS);
+        uintptr_t tx_used = tx_used_client + (i * BUFFER_SIZE * NUM_BUFFERS);
+        ring_init(&tx_ring[i], (ring_buffer_t *)tx_free, (ring_buffer_t *)tx_used, 0, NUM_BUFFERS, NUM_BUFFERS);
+    }
     ring_init(&drv_tx_ring, (ring_buffer_t *)tx_free_driver, (ring_buffer_t *)tx_used_driver, 0, NUM_BUFFERS, NUM_BUFFERS);
 
     // Add buffers to the drv tx ring from our shared dma region
