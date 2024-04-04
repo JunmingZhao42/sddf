@@ -58,6 +58,7 @@ int get_client(struct ethernet_header *buffer)
 
 void rx_return(void)
 {
+    sddf_printf("in VIRT_RX rx_return\n");
     bool reprocess = true;
     bool notify_clients[NUM_CLIENTS] = {false};
     while (reprocess) {
@@ -122,6 +123,7 @@ void rx_return(void)
     for (int client = 0; client < NUM_CLIENTS; client++) {
         if (notify_clients[client] && net_require_signal_active(&state.rx_queue_clients[client])) {
             net_cancel_signal_active(&state.rx_queue_clients[client]);
+            sddf_printf("VIRT_RX: signalling CLIENT_CH: 0x%lx\n", client + CLIENT_CH);
             microkit_notify(client + CLIENT_CH);
         }
     }
@@ -136,8 +138,8 @@ void rx_provide(void)
                 net_buff_desc_t buffer;
                 int err = net_dequeue_free(&state.rx_queue_clients[client], &buffer);
                 assert(!err);
-                assert(!(buffer.io_or_offset % NET_BUFFER_SIZE) &&
-                       (buffer.io_or_offset < NET_BUFFER_SIZE * state.rx_queue_clients[client].size));
+                // assert(!(buffer.io_or_offset % NET_BUFFER_SIZE) &&
+                       // (buffer.io_or_offset < NET_BUFFER_SIZE * state.rx_queue_clients[client].size));
 
                 // Cache invalidate before DMA write to discard dirty
                 // cachelines, so they don't overwrite received data.

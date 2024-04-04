@@ -132,6 +132,7 @@ static int arp_reply(const uint8_t ethsrc_addr[ETH_HWADDR_LEN],
 
 void receive(void)
 {
+    sddf_dprintf("in ARP RX!\n");
     bool transmitted = false;
     bool reprocess = true;
     while (reprocess) {
@@ -157,6 +158,8 @@ void receive(void)
                         }
                     }
                 }
+            } else {
+                sddf_dprintf("ARP: something went wrong!\n");
             }
 
             buffer.len = 0;
