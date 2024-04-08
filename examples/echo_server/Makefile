@@ -187,7 +187,7 @@ qemu: $(IMAGE_FILE)
 			-m size=2G \
 			-nographic \
 			-device virtio-net-device,netdev=netdev0 \
-			-netdev user,id=netdev0 \
+			-netdev user,id=netdev0,hostfwd=tcp::8080-10.0.2.16:1236 \
 			-global virtio-mmio.force-legacy=false \
 			-d guest_errors \
 			-object filter-dump,id=netdev0,netdev=netdev0,file=qemu_netdev.log

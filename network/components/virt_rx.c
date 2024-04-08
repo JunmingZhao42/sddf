@@ -95,6 +95,15 @@ void rx_return(void)
 
             int client = get_client((struct ethernet_header *) buffer_vaddr);
             if (client >= 0) {
+
+                // Hardcode check for arp. This packet should be broadcast to the entire system
+                if (client == 0) {
+                    for (int i = 0; i < NUM_CLIENTS; i++) {
+                        err = net_enqueue_active(&state.rx_queue_clients[i], buffer);
+                        assert(!err);
+                        notify_clients[i] = true;
+                    }
+                }
                 err = net_enqueue_active(&state.rx_queue_clients[client], buffer);
                 assert(!err);
                 notify_clients[client] = true;
