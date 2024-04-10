@@ -237,7 +237,7 @@ protected(microkit_channel ch, microkit_msginfo msginfo)
                     /* there current timeout is now treated as pending */
                     pending_timeouts++;
                 }
-                sddf_dprintf("setting timeout to %lu, rel_timeout is %lu\n", abs_timeout, rel_timeout);
+                // sddf_dprintf("setting timeout to %lu, rel_timeout is %lu\n", abs_timeout, rel_timeout);
                 set_timeout(abs_timeout);
                 timeout_active = true;
 
