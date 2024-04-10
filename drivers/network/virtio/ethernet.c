@@ -31,8 +31,8 @@ uintptr_t rx_active;
 uintptr_t tx_free;
 uintptr_t tx_active;
 
-#define RX_COUNT 128
-#define TX_COUNT 128
+#define RX_COUNT 256
+#define TX_COUNT 256
 #define MAX_COUNT MAX(RX_COUNT, TX_COUNT)
 
 #define HW_RING_SIZE (0x10000)
@@ -58,6 +58,10 @@ uint64_t tx_descriptors[TX_COUNT];
 
 static inline bool virtio_avail_full(struct virtq *virtq) {
     return virtq->avail->idx % virtq->num == virtq->num - 1;
+}
+
+static inline size_t virtio_avail_size(struct virtq *virtq) {
+    return virtq->avail->idx % virtq->num;
 }
 
 static inline bool virtio_used_empty(struct virtq *virtq) {
@@ -100,9 +104,9 @@ static void rx_return(void)
     /* Extract RX buffers from the 'used' and pass them up to the client by putting them
      * in our sDDF 'active' queues. */
     bool packets_transferred = false;
-    // TODO: always handle wrapping with indexes
     size_t i = rx_last_seen_used;
-    while (i != rx_virtq.used->idx) {
+    size_t curr_idx = rx_virtq.used->idx;
+    while (i != curr_idx) {
         LOG_DRIVER("i: 0x%lx\n", i);
         struct virtq_used_elem used = rx_virtq.used->ring[i % rx_virtq.num];
         LOG_DRIVER("used id: 0x%x, len: 0x%x\n", used.id, used.len);
@@ -124,7 +128,7 @@ static void rx_return(void)
         i++;
     }
 
-    rx_last_seen_used = rx_virtq.used->idx;
+    rx_last_seen_used = curr_idx;
 
     if (packets_transferred && net_require_signal_active(&rx_queue)) {
         LOG_DRIVER("signalling RX\n");
@@ -201,23 +205,35 @@ static void tx_return(void)
      * sDDF TX free queue. */
     bool enqueued = false;
     int i = tx_last_seen_used;
-    while (i != tx_last_seen_used) {
-        struct virtq_used_elem used = tx_virtq.used->ring[i % tx_virtq.num];
-        uint64_t addr = tx_virtq.desc[used.id].addr - sizeof(virtio_net_hdr_t);
-        assert(addr % 4096);
+    size_t curr_idx = tx_virtq.used->idx;
+    while (i != curr_idx && !net_queue_full_free(&tx_queue)) {
+        /* For each TX free entry in the sDDF queue, there are *two* virtq used entries.
+         * One for the virtIO header, and one for the packet. */
+        struct virtq_used_elem hdr_used = tx_virtq.used->ring[i % tx_virtq.num];
 
-        net_buff_desc_t buffer = { addr, NET_BUFFER_SIZE };
+        assert(tx_virtq.desc[hdr_used.id].flags & VIRTQ_DESC_F_NEXT);
+
+        struct virtq_desc pkt = tx_virtq.desc[tx_virtq.desc[hdr_used.id].next % tx_virtq.num];
+        uint64_t addr = pkt.addr;
+        assert(!(pkt.flags & VIRTQ_DESC_F_NEXT));
+
+        net_buff_desc_t buffer = { addr, 0 };
         int err = net_enqueue_free(&tx_queue, buffer);
         assert(!err);
         enqueued = true;
 
-        err = ialloc_free(&tx_ialloc_desc, used.id);
+        err = ialloc_free(&tx_ialloc_desc, hdr_used.id);
+        assert(!err);
+        err = ialloc_free(&tx_ialloc_desc, tx_virtq.desc[hdr_used.id].next);
         assert(!err);
 
         i++;
     }
 
-    tx_last_seen_used = tx_virtq.used->idx;
+    // if (enqueued) {
+    //     sddf_dprintf("TX RETURN: last seen: 0x%lx, current: 0x%lx\n", tx_last_seen_used, curr_idx);
+    // }
+    tx_last_seen_used = curr_idx;
 
     if (enqueued && net_require_signal_free(&tx_queue)) {
         net_cancel_signal_free(&tx_queue);
@@ -354,8 +370,6 @@ static void eth_setup(void)
     config->mac[3] = 0x00;
     config->mac[4] = 0x00;
     config->mac[5] = 0x07;
-
-    virtio_net_print_config(config);
 
     // Set the DRIVER_OK status bit
     regs->Status = VIRTIO_DEVICE_STATUS_DRIVER_OK;

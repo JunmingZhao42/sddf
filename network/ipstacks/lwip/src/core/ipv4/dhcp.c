@@ -1792,7 +1792,7 @@ dhcp_recv(void *arg, struct udp_pcb *pcb, struct pbuf *p, const ip_addr_t *addr,
   for (i = 0; i < netif->hwaddr_len && i < LWIP_MIN(DHCP_CHADDR_LEN, NETIF_MAX_HWADDR_LEN); i++) {
     if (netif->hwaddr[i] != reply_msg->chaddr[i]) {
       LWIP_DEBUGF(DHCP_DEBUG | LWIP_DBG_TRACE | LWIP_DBG_LEVEL_WARNING,
-                  ("netif->hwaddr[%"U16_F"]==%02"X16_F" != reply_msg->chaddr[%"U16_F"]==%02"X16_F"\n",
+                  ("netif->hwaddr[%u]==%u != reply_msg->chaddr[%u]==%u\n",
                    (u16_t)i, (u16_t)netif->hwaddr[i], (u16_t)i, (u16_t)reply_msg->chaddr[i]));
       goto free_pbuf_and_return;
     }

@@ -157,8 +157,6 @@ void receive(void)
                         }
                     }
                 }
-            } else {
-                sddf_dprintf("ARP: something went wrong!\n");
             }
 
             buffer.len = 0;
