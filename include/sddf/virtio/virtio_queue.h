@@ -82,10 +82,6 @@ struct virtq {
     struct virtq_desc *desc;
     struct virtq_avail *avail;
     struct virtq_used *used;
-
-    /* Everything below here is custom fields we have added for tracking state. */
-    /* Index of next free descriptor entry */
-    uint16_t desc_free;
 };
 
 static inline int virtq_need_event(uint16_t event_idx, uint16_t new_idx, uint16_t old_idx)

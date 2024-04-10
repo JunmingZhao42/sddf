@@ -2,13 +2,6 @@
  * Copyright 2024, UNSW
  * SPDX-License-Identifier: BSD-2-Clause
  */
-
-/*
- * Main things to figre out are now:
- * how to allocate and free descriptors?
- * need to figure out if timer driver is actually correct
- */
-
 #include <stdbool.h>
 #include <stdint.h>
 #include <microkit.h>
@@ -16,6 +9,7 @@
 #include <sddf/util/fence.h>
 #include <sddf/util/util.h>
 #include <sddf/util/printf.h>
+#include <sddf/util/ialloc.h>
 #include <sddf/virtio/virtio.h>
 #include <sddf/virtio/virtio_queue.h>
 #include <ethernet_config.h>
@@ -57,13 +51,10 @@ virtio_net_hdr_t *virtio_net_headers;
 
 volatile virtio_mmio_regs_t *regs;
 
-struct desc_entry {
-    uint16_t used;
-    uint16_t next;
-};
-
-struct desc_entry rx_descriptors[RX_COUNT];
-struct desc_entry tx_descriptors[TX_COUNT];
+ialloc_t rx_ialloc_desc;
+uint64_t rx_descriptors[RX_COUNT];
+ialloc_t tx_ialloc_desc;
+uint64_t tx_descriptors[TX_COUNT];
 
 static inline bool virtio_avail_full(struct virtq *virtq) {
     return virtq->avail->idx % virtq->num == virtq->num - 1;
@@ -75,24 +66,33 @@ static inline bool virtio_used_empty(struct virtq *virtq) {
 
 static void rx_provide(void)
 {
-    // bool reprocess = true;
-    // while (reprocess) {
-    //     while (!virtio_avail_full(&rx_virtq) && !net_queue_empty_free(&rx_queue)) {
-    //         net_buff_desc_t buffer;
-    //         int err = net_dequeue_free(&rx_queue, &buffer);
-    //         assert(!err);
+    /* We need to take all of our sDDF free entries and place them in the virtIO 'free' ring. */
+    bool reprocess = true;
+    while (reprocess) {
+        while (!virtio_avail_full(&rx_virtq) && !net_queue_empty_free(&rx_queue)) {
+            net_buff_desc_t buffer;
+            int err = net_dequeue_free(&rx_queue, &buffer);
+            assert(!err);
 
-    //         // TODO
-    //     }
+            size_t desc_idx;
+            err = ialloc_alloc(&rx_ialloc_desc, &desc_idx);
+            assert(!err);
 
-    //     net_request_signal_free(&rx_queue);
-    //     reprocess = false;
+            rx_virtq.desc[desc_idx].addr = buffer.io_or_offset;
+            rx_virtq.desc[desc_idx].len = NET_BUFFER_SIZE;
+            rx_virtq.desc[desc_idx].flags = VIRTQ_DESC_F_WRITE;
+            rx_virtq.avail->ring[rx_virtq.avail->idx % rx_virtq.num] = desc_idx;
+            rx_virtq.avail->idx++;
+        }
 
-    //     if (!net_queue_empty_free(&rx_queue) && !virtio_avail_full(&rx_virtq)) {
-    //         net_cancel_signal_free(&rx_queue);
-    //         reprocess = true;
-    //     }
-    // }
+        net_request_signal_free(&rx_queue);
+        reprocess = false;
+
+        if (!net_queue_empty_free(&rx_queue) && !virtio_avail_full(&rx_virtq)) {
+            net_cancel_signal_free(&rx_queue);
+            reprocess = true;
+        }
+    }
 }
 
 static void rx_return(void)
@@ -104,7 +104,7 @@ static void rx_return(void)
     size_t i = rx_last_seen_used;
     while (i != rx_virtq.used->idx) {
         LOG_DRIVER("i: 0x%lx\n", i);
-        struct virtq_used_elem used = rx_virtq.used->ring[i];
+        struct virtq_used_elem used = rx_virtq.used->ring[i % rx_virtq.num];
         LOG_DRIVER("used id: 0x%x, len: 0x%x\n", used.id, used.len);
         uint64_t addr = rx_virtq.desc[used.id].addr + sizeof(virtio_net_hdr_t);
         uint32_t len = used.len - sizeof(virtio_net_hdr_t);
@@ -116,16 +116,10 @@ static void rx_return(void)
 
         assert(!(rx_virtq.desc[used.id].flags & VIRTQ_DESC_F_NEXT));
 
-        // while (rx_virtq.desc[used.id].flags & VIRTQ_DESC_F_NEXT) {
-        //     LOG_DRIVER("has next!\n");
-        //     used = rx_virtq.used->ring[rx_virtq.desc[used.id].next];
-        //     uint64_t addr = rx_virtq.desc[used.id].addr;
-        //     uint32_t len = rx_virtq.desc[used.id].len;
-        //     LOG_DRIVER("addr: 0x%lx, len: 0x%x\n", addr, len);
-        //     net_buff_desc_t buffer = { addr, len };
-        //     int err = net_enqueue_active(&rx_queue, buffer);
-        //     assert(!err);
-        // }
+        /* Now that we have consumed the descriptor for the RX buffer. */
+        err = ialloc_free(&rx_ialloc_desc, used.id);
+        assert(!err);
+
         packets_transferred = true;
         i++;
     }
@@ -149,38 +143,38 @@ static void tx_provide(void)
             assert(!err);
 
             /* Now we need to put our buffer into the virtIO ring */
-            size_t desc_idx = tx_virtq.desc_free;
+            size_t hdr_desc_idx;
+            err = ialloc_alloc(&tx_ialloc_desc, &hdr_desc_idx);
+            assert(!err);
+            size_t pkt_desc_idx;
+            err = ialloc_alloc(&tx_ialloc_desc, &pkt_desc_idx);
+            assert(!err);
             /* We should not run out of descriptors assuming that the avail ring is not full. */
-            assert(desc_idx < tx_virtq.num);
-            tx_virtq.avail->ring[tx_virtq.avail->idx] = desc_idx;
-            tx_virtq.desc_free++;
+            assert(hdr_desc_idx < tx_virtq.num);
+            assert(pkt_desc_idx < tx_virtq.num);
+            tx_virtq.avail->ring[tx_virtq.avail->idx % tx_virtq.num] = hdr_desc_idx;
 
-            virtio_net_hdr_t *hdr = &virtio_net_headers[desc_idx];
+            virtio_net_hdr_t *hdr = &virtio_net_headers[hdr_desc_idx];
             hdr->flags = 0;
             hdr->gso_type = VIRTIO_NET_HDR_GSO_NONE;
             hdr->hdr_len = 0;  /* not used unless we have segmentation offload */
             hdr->gso_size = 0; /* same */
             hdr->csum_start = 0;
             hdr->csum_offset = 0;
-            tx_virtq.desc[desc_idx].addr = virtio_net_headers_paddr + (desc_idx * sizeof(virtio_net_hdr_t));
-            tx_virtq.desc[desc_idx].len = sizeof(virtio_net_hdr_t);
-            tx_virtq.desc[desc_idx].next = tx_virtq.desc_free;
-            tx_virtq.desc[desc_idx].flags = VIRTQ_DESC_F_NEXT;
+            tx_virtq.desc[hdr_desc_idx].addr = virtio_net_headers_paddr + (hdr_desc_idx * sizeof(virtio_net_hdr_t));
+            tx_virtq.desc[hdr_desc_idx].len = sizeof(virtio_net_hdr_t);
+            tx_virtq.desc[hdr_desc_idx].next = pkt_desc_idx;
+            tx_virtq.desc[hdr_desc_idx].flags = VIRTQ_DESC_F_NEXT;
 
-            LOG_DRIVER("header desc_idx: 0x%lx addr: 0x%lx, len: 0x%x, next: 0x%x\n", desc_idx,
-                tx_virtq.desc[desc_idx].addr, tx_virtq.desc[desc_idx].len, tx_virtq.desc[desc_idx].next);
+            LOG_DRIVER("header desc_idx: 0x%lx addr: 0x%lx, len: 0x%x, next: 0x%x\n", hdr_desc_idx,
+                tx_virtq.desc[hdr_desc_idx].addr, tx_virtq.desc[hdr_desc_idx].len, tx_virtq.desc[hdr_desc_idx].next);
 
-            desc_idx = tx_virtq.desc_free;
-            /* We should not run out of descriptors assuming that the avail ring is not full. */
-            assert(desc_idx < tx_virtq.num);
-            tx_virtq.desc_free++;
-
-            tx_virtq.desc[desc_idx].addr = buffer.io_or_offset;
-            tx_virtq.desc[desc_idx].len = buffer.len;
-            tx_virtq.desc[desc_idx].flags = 0;
+            tx_virtq.desc[pkt_desc_idx].addr = buffer.io_or_offset;
+            tx_virtq.desc[pkt_desc_idx].len = buffer.len;
+            tx_virtq.desc[pkt_desc_idx].flags = 0;
 
             LOG_DRIVER("enqueueing into virtIO avail TX ring, desc_idx: 0x%lx, addr: 0x%lx, len: 0x%x\n",
-                        desc_idx, buffer.io_or_offset, buffer.len);
+                        pkt_desc_idx, buffer.io_or_offset, buffer.len);
 
             /* @ivanv: use a memory fence. If a memory fence is used, it is more optimal
              * to update this number only once */
@@ -204,21 +198,26 @@ static void tx_provide(void)
 static void tx_return(void)
 {
     /* We must look through the 'used' ring of the TX virtqueue and place them in our
-     * sDDF *free* queue. I understand the terminology is confusing. */
+     * sDDF TX free queue. */
     bool enqueued = false;
-    // size_t virtq_idx = tx_virtq.used->idx;
-    // while () {
-        /* Ensure that this buffer has been sent by the device */
-        // volatile struct descriptor *d = &(tx.descr[tx.head]);
-        // if (d->status & DESC_TXSTS_OWNBYDMA) break;
-        // net_buff_desc_t buffer = tx.descr_mdata[tx.head];
-        // THREAD_MEMORY_ACQUIRE();
+    int i = tx_last_seen_used;
+    while (i != tx_last_seen_used) {
+        struct virtq_used_elem used = tx_virtq.used->ring[i % tx_virtq.num];
+        uint64_t addr = tx_virtq.desc[used.id].addr - sizeof(virtio_net_hdr_t);
+        assert(addr % 4096);
 
-        // int err = net_enqueue_free(&tx_queue, buffer);
-        // assert(!err);
-        // enqueued = true;
-        // tx.head = (tx.head + 1) % TX_COUNT;
-    // }
+        net_buff_desc_t buffer = { addr, NET_BUFFER_SIZE };
+        int err = net_enqueue_free(&tx_queue, buffer);
+        assert(!err);
+        enqueued = true;
+
+        err = ialloc_free(&tx_ialloc_desc, used.id);
+        assert(!err);
+
+        i++;
+    }
+
+    tx_last_seen_used = tx_virtq.used->idx;
 
     if (enqueued && net_require_signal_free(&tx_queue)) {
         net_cancel_signal_free(&tx_queue);
@@ -273,15 +272,13 @@ static void eth_setup(void)
     // Set the DRIVER bit to say we know how to drive the device
     regs->Status = VIRTIO_DEVICE_STATUS_DRIVER;
 
-    LOG_DRIVER("device feature bits:\n");
+#ifdef DEBUG_DRIVER
     uint32_t feature_low = regs->DeviceFeatures;
-    LOG_DRIVER("feature low: 0x%x\n", feature_low);
     regs->DeviceFeaturesSel = 1;
     uint32_t feature_high = regs->DeviceFeatures;
-    LOG_DRIVER("feature high: 0x%x\n", feature_high);
     uint64_t feature = feature_low | ((uint64_t)feature_high << 32);
-    LOG_DRIVER("feature: 0x%lx\n", feature);
     virtio_net_print_features(feature);
+#endif
 
     regs->DriverFeatures = VIRTIO_NET_F_MAC;
     regs->DriverFeaturesSel = 1;
@@ -295,7 +292,9 @@ static void eth_setup(void)
     }
 
     volatile virtio_net_config_t *config = (virtio_net_config_t *)regs->Config;
+#ifdef DEBUG_DRIVER
     virtio_net_print_config(config);
+#endif
 
     // Setup the virtqueues
 
@@ -315,31 +314,14 @@ static void eth_setup(void)
     rx_virtq.desc = (struct virtq_desc *)(hw_ring_buffer_vaddr + rx_desc_off);
     rx_virtq.avail = (struct virtq_avail *)(hw_ring_buffer_vaddr + rx_avail_off);
     rx_virtq.used = (struct virtq_used *)(hw_ring_buffer_vaddr + rx_used_off);
-    rx_virtq.desc_free = 0;
-
-    for (int i = 0; i < RX_COUNT - 1; i++) {
-        net_buff_desc_t desc;
-        // LOG_DRIVER("here 1!\n");
-        int err = net_dequeue_free(&rx_queue, &desc);
-        // LOG_DRIVER("here 2!\n");
-        assert(!err);
-
-        // TODO: some check for whether desc.len is valid?
-        // LOG_DRIVER("(%d): addr: 0x%lx, len: 0x%x\n", i, desc.io_or_offset, NET_BUFFER_SIZE);
-        rx_virtq.desc[i].addr = desc.io_or_offset;
-        rx_virtq.desc[i].len = NET_BUFFER_SIZE;
-        rx_virtq.desc[i].flags = VIRTQ_DESC_F_WRITE;
-        rx_virtq.avail->ring[rx_virtq.avail->idx] = i;
-        rx_virtq.avail->idx++;
-    }
-
-    assert(virtio_avail_full(&rx_virtq));
 
     tx_virtq.num = TX_COUNT;
     tx_virtq.desc = (struct virtq_desc *)(hw_ring_buffer_vaddr + tx_desc_off);
     tx_virtq.avail = (struct virtq_avail *)(hw_ring_buffer_vaddr + tx_avail_off);
     tx_virtq.used = (struct virtq_used *)(hw_ring_buffer_vaddr + tx_used_off);
-    tx_virtq.desc_free = 0;
+
+    rx_provide();
+    tx_provide();
 
     // Setup RX queue first
     assert(regs->QueueNumMax >= RX_COUNT);
@@ -385,13 +367,13 @@ void init(void)
     regs = (volatile virtio_mmio_regs_t *) (eth_regs + VIRTIO_MMIO_NET_OFFSET);
     virtio_net_headers = (virtio_net_hdr_t *) virtio_net_headers_vaddr;
 
+    ialloc_init(&rx_ialloc_desc, rx_descriptors, RX_COUNT);
+    ialloc_init(&tx_ialloc_desc, tx_descriptors, TX_COUNT);
+
     net_queue_init(&rx_queue, (net_queue_t *)rx_free, (net_queue_t *)rx_active, RX_QUEUE_SIZE_DRIV);
     net_queue_init(&tx_queue, (net_queue_t *)tx_free, (net_queue_t *)tx_active, TX_QUEUE_SIZE_DRIV);
 
     eth_setup();
-
-    // rx_provide();
-    // tx_provide();
 
     microkit_irq_ack(IRQ_CH);
 }
@@ -400,16 +382,13 @@ void notified(microkit_channel ch)
 {
     switch(ch) {
         case IRQ_CH:
-            LOG_DRIVER("==================== got IRQ!\n");
             handle_irq();
             microkit_irq_ack_delayed(ch);
             break;
         case RX_CH:
-            LOG_DRIVER("got message from RX!\n");
             rx_provide();
             break;
         case TX_CH:
-            LOG_DRIVER("got message from TX!\n");
             tx_provide();
             break;
         default:
