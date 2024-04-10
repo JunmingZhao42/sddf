@@ -58,7 +58,7 @@ int get_client(struct ethernet_header *buffer)
 
 void rx_return(void)
 {
-    sddf_dprintf("in VIRT_RX rx_return\n");
+    // sddf_dprintf("in VIRT_RX rx_return\n");
     bool reprocess = true;
     bool notify_clients[NUM_CLIENTS] = {false};
     while (reprocess) {
@@ -107,7 +107,7 @@ void rx_return(void)
                 err = net_enqueue_active(&state.rx_queue_clients[client], buffer);
                 assert(!err);
                 notify_clients[client] = true;
-                sddf_dprintf("VIRT_RX: mac addr is: ");
+                // sddf_dprintf("VIRT_RX: mac addr is: ");
                 struct ethernet_header *hdr = (struct ethernet_header *) (buffer.io_or_offset + buffer_data_vaddr);
                 for (int i = 0; i < ETH_HWADDR_LEN; i++) {
                     sddf_dprintf("%x", hdr->dest.addr[i]);
@@ -138,7 +138,7 @@ void rx_return(void)
     for (int client = 0; client < NUM_CLIENTS; client++) {
         if (notify_clients[client] && net_require_signal_active(&state.rx_queue_clients[client])) {
             net_cancel_signal_active(&state.rx_queue_clients[client]);
-            sddf_dprintf("VIRT_RX: signalling CLIENT_CH: 0x%lx\n", client + CLIENT_CH);
+            // sddf_dprintf("VIRT_RX: signalling CLIENT_CH: 0x%lx\n", client + CLIENT_CH);
             microkit_notify(client + CLIENT_CH);
         }
     }

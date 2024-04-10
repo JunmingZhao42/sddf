@@ -1,7 +1,7 @@
 #include <stdint.h>
 #include <sddf/util/printf.h>
 
-#define DEBUG_DRIVER
+// #define DEBUG_DRIVER
 
 #ifdef DEBUG_DRIVER
 #define LOG_DRIVER(...) do{ sddf_dprintf("ETH DRIVER|INFO: "); sddf_dprintf(__VA_ARGS__); }while(0)

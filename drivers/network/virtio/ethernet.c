@@ -325,7 +325,7 @@ static void eth_setup(void)
         assert(!err);
 
         // TODO: some check for whether desc.len is valid?
-        LOG_DRIVER("(%d): addr: 0x%lx, len: 0x%x\n", i, desc.io_or_offset, NET_BUFFER_SIZE);
+        // LOG_DRIVER("(%d): addr: 0x%lx, len: 0x%x\n", i, desc.io_or_offset, NET_BUFFER_SIZE);
         rx_virtq.desc[i].addr = desc.io_or_offset;
         rx_virtq.desc[i].len = NET_BUFFER_SIZE;
         rx_virtq.desc[i].flags = VIRTQ_DESC_F_WRITE;
