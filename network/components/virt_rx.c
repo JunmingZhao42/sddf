@@ -28,6 +28,8 @@ uintptr_t rx_active_cli1;
 uintptr_t buffer_data_vaddr;
 uintptr_t buffer_data_paddr;
 
+int buff_refs[RX_QUEUE_SIZE_DRIV] = {0};
+
 typedef struct state {
     net_queue_handle_t rx_queue_drv;
     net_queue_handle_t rx_queue_clients[NUM_CLIENTS];
@@ -38,6 +40,17 @@ state_t state;
 
 /* Boolean to indicate whether a packet has been enqueued into the driver's free queue during notification handling */
 static bool notify_drv;
+
+bool is_broadcast(struct ethernet_header *buffer) {
+    bool match = true;
+    for (int i = 0; (i < ETH_HWADDR_LEN) && match; i++) {
+        if (buffer->dest.addr[i] != 0xFF) {
+            match = false;
+        }
+    }
+
+    return match;
+}
 
 /* Return the client ID if the Mac address is a match. */
 int get_client(struct ethernet_header *buffer)
@@ -58,7 +71,6 @@ int get_client(struct ethernet_header *buffer)
 
 void rx_return(void)
 {
-    // sddf_dprintf("in VIRT_RX rx_return\n");
     bool reprocess = true;
     bool notify_clients[NUM_CLIENTS] = {false};
     while (reprocess) {
@@ -93,34 +105,42 @@ void rx_return(void)
             // [2]: https://developer.arm.com/documentation/100236/0002/functional-description/cache-behavior-and-cache-protection/invalidating-or-cleaning-a-cache
             cache_clean_and_invalidate(buffer_vaddr, buffer_vaddr + ROUND_UP(buffer.len, 1 << CONFIG_L1_CACHE_LINE_SIZE_BITS));
 
-            int client = get_client((struct ethernet_header *) buffer_vaddr);
-            if (client >= 0) {
+            bool is_broadcast_packet = is_broadcast((struct ethernet_header *) buffer_vaddr);
 
-                // Hardcode check for arp. This packet should be broadcast to the entire system
-                if (client == 0) {
-                    for (int i = 0; i < NUM_CLIENTS; i++) {
-                        err = net_enqueue_active(&state.rx_queue_clients[i], buffer);
-                        assert(!err);
-                        notify_clients[i] = true;
-                    }
+            if (is_broadcast_packet) {
+                int ref_index = buffer.io_or_offset / NET_BUFFER_SIZE;
+                sddf_dprintf("VIRTRX got broadcast!, ref_idx: 0x%lx\n", ref_index);
+                assert(buff_refs[ref_index] == 0);
+                buff_refs[ref_index] = NUM_CLIENTS;
+
+                for (int i = 0; i < NUM_CLIENTS; i++) {
+                    err = net_enqueue_active(&state.rx_queue_clients[i], buffer);
+                    assert(!err);
+                    notify_clients[i] = true;
                 }
-                err = net_enqueue_active(&state.rx_queue_clients[client], buffer);
-                assert(!err);
-                notify_clients[client] = true;
-                struct ethernet_header *hdr = (struct ethernet_header *) (buffer.io_or_offset + buffer_data_vaddr);
             } else {
-                // We are returning buffers to the device for DMA, which
-                // normally requires an invalidate (see rx_provide), but not
-                // here since we know there aren't any writes to the buffer
-                // since we invalidated above.
+                int client = get_client((struct ethernet_header *) buffer_vaddr);
+                if (client >= 0) {
+                    int ref_index = buffer.io_or_offset / NET_BUFFER_SIZE;
+                    assert(buff_refs[ref_index] == 0);
+                    buff_refs[ref_index] = 1;
 
-                buffer.io_or_offset = buffer.io_or_offset + buffer_data_paddr;
-                err = net_enqueue_free(&state.rx_queue_drv, buffer);
-                assert(!err);
-                notify_drv = true;
+                    err = net_enqueue_active(&state.rx_queue_clients[client], buffer);
+                    assert(!err);
+                    notify_clients[client] = true;
+                } else {
+                    // We are returning buffers to the device for DMA, which
+                    // normally requires an invalidate (see rx_provide), but not
+                    // here since we know there aren't any writes to the buffer
+                    // since we invalidated above.
+
+                    buffer.io_or_offset = buffer.io_or_offset + buffer_data_paddr;
+                    err = net_enqueue_free(&state.rx_queue_drv, buffer);
+                    assert(!err);
+                    notify_drv = true;
+                }
             }
         }
-
         net_request_signal_active(&state.rx_queue_drv);
         reprocess = false;
 
@@ -133,7 +153,6 @@ void rx_return(void)
     for (int client = 0; client < NUM_CLIENTS; client++) {
         if (notify_clients[client] && net_require_signal_active(&state.rx_queue_clients[client])) {
             net_cancel_signal_active(&state.rx_queue_clients[client]);
-            // sddf_dprintf("VIRT_RX: signalling CLIENT_CH: 0x%lx\n", client + CLIENT_CH);
             microkit_notify(client + CLIENT_CH);
         }
     }
@@ -149,8 +168,16 @@ void rx_provide(void)
                 int err = net_dequeue_free(&state.rx_queue_clients[client], &buffer);
                 assert(!err);
                 // assert(!(buffer.io_or_offset % NET_BUFFER_SIZE) &&
-                       // (buffer.io_or_offset < NET_BUFFER_SIZE * state.rx_queue_clients[client].size));
+                //        (buffer.io_or_offset < NET_BUFFER_SIZE * state.rx_queue_clients[client].size));
 
+                int ref_index = buffer.io_or_offset / NET_BUFFER_SIZE;
+                assert(buff_refs[ref_index] != 0);
+
+                buff_refs[ref_index]--;
+
+                if (buff_refs[ref_index] != 0) {
+                    continue;
+                }
                 // Cache invalidate before DMA write to discard dirty
                 // cachelines, so they don't overwrite received data.
                 //
