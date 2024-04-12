@@ -56,16 +56,16 @@ uint64_t rx_descriptors[RX_COUNT];
 ialloc_t tx_ialloc_desc;
 uint64_t tx_descriptors[TX_COUNT];
 
-static inline bool virtio_avail_full(struct virtq *virtq) {
-    return virtq->avail->idx % virtq->num == virtq->num - 1;
+int rx_last_avail_idx = 0;
+bool initd = false;
+int tx_last_avail_idx = 0;
+
+static inline bool virtio_avail_full_rx(struct virtq *virtq) {
+    return rx_last_avail_idx >= rx_virtq.num;
 }
 
-static inline size_t virtio_avail_size(struct virtq *virtq) {
-    return virtq->avail->idx % virtq->num;
-}
-
-static inline bool virtio_used_empty(struct virtq *virtq) {
-    return virtq->used->idx % virtq->num == 0;
+static inline bool virtio_avail_full_tx(struct virtq *virtq) {
+    return tx_last_avail_idx >= tx_virtq.num;
 }
 
 static void rx_provide(void)
@@ -73,26 +73,38 @@ static void rx_provide(void)
     /* We need to take all of our sDDF free entries and place them in the virtIO 'free' ring. */
     bool reprocess = true;
     while (reprocess) {
-        while (!virtio_avail_full(&rx_virtq) && !net_queue_empty_free(&rx_queue)) {
+        if (virtio_avail_full_rx(&rx_virtq) && !net_queue_empty_free(&rx_queue)) {
+            sddf_dprintf("virtq ring full but more free entries\n");
+        }
+        // sddf_dprintf("size of rx: 0x%lx\n", virtio_avail_size(&rx_virtq));
+        sddf_dprintf("idx: 0x%lx\n", rx_virtq.avail->idx);
+        while (!virtio_avail_full_rx(&rx_virtq) && !net_queue_empty_free(&rx_queue)) {
             net_buff_desc_t buffer;
             int err = net_dequeue_free(&rx_queue, &buffer);
             assert(!err);
-
             size_t desc_idx;
             err = ialloc_alloc(&rx_ialloc_desc, &desc_idx);
             assert(!err);
+
+            sddf_dprintf("desc_idx: 0x%lx, addr: 0x%lx\n", desc_idx, buffer.io_or_offset);
+
+            if ((buffer.io_or_offset % NET_BUFFER_SIZE) != 0) {
+                buffer.io_or_offset -= sizeof(virtio_net_hdr_t);
+            }
+            assert((buffer.io_or_offset % NET_BUFFER_SIZE) == 0);
 
             rx_virtq.desc[desc_idx].addr = buffer.io_or_offset;
             rx_virtq.desc[desc_idx].len = NET_BUFFER_SIZE;
             rx_virtq.desc[desc_idx].flags = VIRTQ_DESC_F_WRITE;
             rx_virtq.avail->ring[rx_virtq.avail->idx % rx_virtq.num] = desc_idx;
             rx_virtq.avail->idx++;
+            rx_last_avail_idx++;
         }
 
         net_request_signal_free(&rx_queue);
         reprocess = false;
 
-        if (!net_queue_empty_free(&rx_queue) && !virtio_avail_full(&rx_virtq)) {
+        if (!net_queue_empty_free(&rx_queue) && !virtio_avail_full_rx(&rx_virtq)) {
             net_cancel_signal_free(&rx_queue);
             reprocess = true;
         }
@@ -112,6 +124,7 @@ static void rx_return(void)
         LOG_DRIVER("used id: 0x%x, len: 0x%x\n", used.id, used.len);
         uint64_t addr = rx_virtq.desc[used.id].addr + sizeof(virtio_net_hdr_t);
         uint32_t len = used.len - sizeof(virtio_net_hdr_t);
+
         // TODO: assert that len > 0?
         LOG_DRIVER("descriptor addr: 0x%lx, len: 0x%x\n", addr, len);
         net_buff_desc_t buffer = { addr, len };
@@ -123,7 +136,7 @@ static void rx_return(void)
         /* Now that we have consumed the descriptor for the RX buffer. */
         err = ialloc_free(&rx_ialloc_desc, used.id);
         assert(!err);
-
+        rx_last_avail_idx--;
         packets_transferred = true;
         i++;
     }
@@ -141,7 +154,7 @@ static void tx_provide(void)
 {
     bool reprocess = true;
     while (reprocess) {
-        while (!virtio_avail_full(&tx_virtq) && !net_queue_empty_active(&tx_queue)) {
+        while (!virtio_avail_full_tx(&tx_virtq) && !net_queue_empty_active(&tx_queue)) {
             net_buff_desc_t buffer;
             int err = net_dequeue_active(&tx_queue, &buffer);
             assert(!err);
@@ -183,12 +196,13 @@ static void tx_provide(void)
             /* @ivanv: use a memory fence. If a memory fence is used, it is more optimal
              * to update this number only once */
             tx_virtq.avail->idx++;
+            tx_last_avail_idx++;
         }
 
         net_request_signal_active(&tx_queue);
         reprocess = false;
 
-        if (!virtio_avail_full(&tx_virtq) && !net_queue_empty_active(&tx_queue)) {
+        if (!virtio_avail_full_tx(&tx_virtq) && !net_queue_empty_active(&tx_queue)) {
             net_cancel_signal_active(&tx_queue);
             reprocess = true;
         }
@@ -226,7 +240,7 @@ static void tx_return(void)
         assert(!err);
         err = ialloc_free(&tx_ialloc_desc, tx_virtq.desc[hdr_used.id].next);
         assert(!err);
-
+        tx_last_avail_idx--;
         i++;
     }
 
@@ -390,6 +404,8 @@ void init(void)
     eth_setup();
 
     microkit_irq_ack(IRQ_CH);
+
+    initd = true;
 }
 
 void notified(microkit_channel ch)
