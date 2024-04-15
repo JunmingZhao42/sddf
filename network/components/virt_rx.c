@@ -167,8 +167,8 @@ void rx_provide(void)
                 net_buff_desc_t buffer;
                 int err = net_dequeue_free(&state.rx_queue_clients[client], &buffer);
                 assert(!err);
-                // assert(!(buffer.io_or_offset % NET_BUFFER_SIZE) &&
-                //        (buffer.io_or_offset < NET_BUFFER_SIZE * state.rx_queue_clients[client].size));
+                assert(!(buffer.io_or_offset % NET_BUFFER_SIZE) &&
+                       (buffer.io_or_offset < NET_BUFFER_SIZE * state.rx_queue_clients[client].size));
 
                 int ref_index = buffer.io_or_offset / NET_BUFFER_SIZE;
                 assert(buff_refs[ref_index] != 0);
