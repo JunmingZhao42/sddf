@@ -59,16 +59,16 @@ uint64_t rx_descriptors[RX_COUNT];
 ialloc_t tx_ialloc_desc;
 uint64_t tx_descriptors[TX_COUNT];
 
-int rx_last_avail_idx = 0;
+int rx_last_desc_idx = 0;
 bool initd = false;
-int tx_last_avail_idx = 0;
+int tx_last_desc_idx = 0;
 
 static inline bool virtio_avail_full_rx(struct virtq *virtq) {
-    return rx_last_avail_idx >= rx_virtq.num;
+    return rx_last_desc_idx >= rx_virtq.num;
 }
 
 static inline bool virtio_avail_full_tx(struct virtq *virtq) {
-    return tx_last_avail_idx >= tx_virtq.num;
+    return tx_last_desc_idx >= tx_virtq.num;
 }
 
 static void rx_provide(void)
@@ -109,7 +109,7 @@ static void rx_provide(void)
             // We only want to increment the avail ring by 1, as we are only increasing by one in
             // this list, but we are adding two desc entries.
             rx_virtq.avail->idx++;
-            rx_last_avail_idx += 2;
+            rx_last_desc_idx += 2;
         }
 
         net_request_signal_free(&rx_queue);
@@ -149,7 +149,7 @@ static void rx_return(void)
         err = ialloc_free(&rx_ialloc_desc, rx_virtq.desc[hdr_used.id].next);
         assert(!err);
 
-        rx_last_avail_idx -= 2;
+        rx_last_desc_idx -= 2;
         packets_transferred = true;
         i++;
     }
@@ -202,7 +202,7 @@ static void tx_provide(void)
             /* @ivanv: use a memory fence. If a memory fence is used, it is more optimal
              * to update this number only once */
             tx_virtq.avail->idx++;
-            tx_last_avail_idx += 2;
+            tx_last_desc_idx += 2;
         }
 
         net_request_signal_active(&tx_queue);
@@ -246,7 +246,7 @@ static void tx_return(void)
         assert(!err);
         err = ialloc_free(&tx_ialloc_desc, tx_virtq.desc[hdr_used.id].next);
         assert(!err);
-        tx_last_avail_idx -= 2;
+        tx_last_desc_idx -= 2;
         i++;
     }
 
