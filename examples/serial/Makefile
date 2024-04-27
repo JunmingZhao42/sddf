@@ -21,6 +21,7 @@ AS := $(TOOLCHAIN)-as
 MICROKIT_TOOL := $(MICROKIT_SDK)/bin/microkit
 MICROKIT_CONFIG ?= debug
 BUILD_DIR ?= build
+SERIAL_CONFIG_INCLUDE ?= include/serial_config
 
 ifeq ($(strip $(MICROKIT_BOARD)), odroidc4)
 	DRIVER_DIR := meson
@@ -42,7 +43,7 @@ UART_DRIVER=$(SDDF)/drivers/serial/$(DRIVER_DIR)
 BOARD_DIR := $(MICROKIT_SDK)/board/$(MICROKIT_BOARD)/$(MICROKIT_CONFIG)
 SYSTEM_FILE := board/$(MICROKIT_BOARD)/serial.system
 
-IMAGES := uart.elf serial_server_1.elf serial_server_2.elf virt_tx.elf virt_rx.elf
+IMAGES := uart.elf serial_server.elf virt_tx.elf virt_rx.elf
 CFLAGS := -mcpu=$(CPU) -mstrict-align -ffreestanding -g3 -O3 -Wall -Wno-unused-function -Werror
 LDFLAGS := -L$(BOARD_DIR)/lib -L$(SDDF)/lib
 LIBS := -lmicrokit -Tmicrokit.ld -lc
@@ -52,19 +53,19 @@ REPORT_FILE = $(BUILD_DIR)/report.txt
 
 CFLAGS += -I$(BOARD_DIR)/include \
 	-Iinclude	\
+	-I$(SERIAL_CONFIG_INCLUDE) \
 	-I$(UART_DRIVER)/include \
 	-I$(SDDF)/include \
 
 UART_OBJS := uart.o printf.o putchar_debug.o
-SERIAL_SERVER_OBJS1 := serial_server_1.o
-SERIAL_SERVER_OBJS2 := serial_server_2.o
+SERIAL_SERVER_OBJS := serial_server.o
 VIRT_TX_OBJS := virt_tx.o
 VIRT_RX_OBJS := virt_rx.o
 
 all: directories $(IMAGE_FILE)
 
 $(BUILD_DIR)/%.o: $(SERIAL_COMPONENTS)/%.c Makefile
-	$(CC) -c $(CFLAGS) -DSERIAL_NUM_CLIENTS=2 -DSERIAL_TRANSFER_WITH_COLOUR $< -o $@
+	$(CC) -c $(CFLAGS) -DSERIAL_TRANSFER_WITH_COLOUR $< -o $@
 
 $(BUILD_DIR)/%.o: $(SERIAL_QUEUE)/%.c Makefile
 	$(CC) -c $(CFLAGS) $< -o $@
@@ -78,11 +79,8 @@ $(BUILD_DIR)/printf.o: $(UTIL)/printf.c Makefile
 $(BUILD_DIR)/putchar_debug.o: $(UTIL)/putchar_debug.c Makefile
 	$(CC) -c $(CFLAGS) $< -o $@
 
-$(BUILD_DIR)/serial_server_1.o: serial_server.c Makefile
-	$(CC) -c $(CFLAGS) -DSERIAL_SERVER_NUMBER=1 $< -o $@
-
-$(BUILD_DIR)/serial_server_2.o: serial_server.c Makefile
-	$(CC) -c $(CFLAGS) -DSERIAL_SERVER_NUMBER=2 $< -o $@
+$(BUILD_DIR)/serial_server.o: serial_server.c Makefile
+	$(CC) -c $(CFLAGS) $< -o $@
 
 $(BUILD_DIR)/virt_tx.elf: $(addprefix $(BUILD_DIR)/, $(VIRT_TX_OBJS))
 	$(LD) $(LDFLAGS) $^ $(LIBS) -o $@
@@ -93,10 +91,7 @@ $(BUILD_DIR)/virt_rx.elf: $(addprefix $(BUILD_DIR)/, $(VIRT_RX_OBJS))
 $(BUILD_DIR)/uart.elf: $(addprefix $(BUILD_DIR)/, $(UART_OBJS))
 	$(LD) $(LDFLAGS) $^ $(LIBS) -o $@
 
-$(BUILD_DIR)/serial_server_1.elf: $(addprefix $(BUILD_DIR)/, $(SERIAL_SERVER_OBJS1))
-	$(LD) $(LDFLAGS) $^ $(LIBS) -o $@
-
-$(BUILD_DIR)/serial_server_2.elf: $(addprefix $(BUILD_DIR)/, $(SERIAL_SERVER_OBJS2))
+$(BUILD_DIR)/serial_server.elf: $(addprefix $(BUILD_DIR)/, $(SERIAL_SERVER_OBJS))
 	$(LD) $(LDFLAGS) $^ $(LIBS) -o $@
 
 $(IMAGE_FILE) $(REPORT_FILE): $(addprefix $(BUILD_DIR)/, $(IMAGES)) $(SYSTEM_FILE)
