@@ -3,7 +3,7 @@
 #include <sddf/util/util.h>
 #include <sddf/util/printf.h>
 
-#ifndef CONFIG_EXPORT_PCNT_USER
+#if !(CONFIG_EXPORT_PCNT_USER && CONFIG_EXPORT_PTMR_USER)
 #error "ARM generic timer is not exported by seL4"
 #endif
 
