@@ -157,7 +157,7 @@ protected(microkit_channel ch, microkit_msginfo msginfo)
                     /* there current timeout is now treated as pending */
                     pending_timeouts++;
                 }
-                set_timeout((uint32_t)(rel_timeout / NS_IN_MS));
+                set_timeout((uint32_t)(rel_timeout / NS_IN_US));
                 timeout_active = true;
 
                 /* We need to keep track of how far into the future this is so
@@ -183,7 +183,7 @@ init(void)
 
     /* Start timer E acts as a clock, while timer A can be used for timeouts from clients */
     regs->mux = TIMER_A_EN | (TIMESTAMP_TIMEBASE_1_US << TIMER_E_INPUT_CLK) |
-                       (TIMEOUT_TIMEBASE_1_MS << TIMER_A_INPUT_CLK);
+                       (TIMEOUT_TIMEBASE_1_US << TIMER_A_INPUT_CLK);
 
     regs->timer_e = 0;
 }
