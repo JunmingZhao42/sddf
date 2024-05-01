@@ -7,7 +7,7 @@
 #error "ARM generic timer is not exported by seL4"
 #endif
 
-static uint64_t freq;
+static uint64_t timer_freq;
 
 #define IRQ_CH 0
 /* @ivanv: these are repeated across all timer drivers for some reason */
@@ -18,10 +18,6 @@ static uint64_t freq;
 #define GENERIC_TIMER_ENABLE (1 << 0)
 #define GENERIC_TIMER_IMASK  (1 << 1)
 #define GENERIC_TIMER_STATUS (1 << 2)
-
-// typedef struct {
-//     uint32_t freq;
-// } generic_timer_t;
 
 #define COPROC_WRITE_WORD(R,W) asm volatile ("msr " R  ", %0" :: "r"(W))
 #define COPROC_READ_WORD(R,W)  asm volatile ("mrs %0, " R : "=r" (W))
@@ -74,47 +70,10 @@ static inline void generic_timer_or_ctrl(uintptr_t bits)
     generic_timer_write_ctrl(ctrl | bits);
 }
 
-// static inline void generic_timer_and_ctrl(uintptr_t bits)
-// {
-//     uintptr_t ctrl = generic_timer_read_ctrl();
-//     generic_timer_write_ctrl(ctrl & bits);
-// }
-
 static inline void generic_timer_enable(void)
 {
     generic_timer_or_ctrl(GENERIC_TIMER_ENABLE);
 }
-
-// static inline void generic_timer_disable(void)
-// {
-//     generic_timer_and_ctrl(~GENERIC_TIMER_ENABLE);
-// }
-
-// static inline void generic_timer_unmask_irq(void)
-// {
-//     generic_timer_and_ctrl(~GENERIC_TIMER_IMASK);
-// }
-
-// static inline void generic_timer_mask_irq(void)
-// {
-//     generic_timer_or_ctrl(GENERIC_TIMER_IMASK);
-// }
-
-// static inline uintptr_t generic_timer_status(void)
-// {
-//     return generic_timer_read_ctrl() & GENERIC_TIMER_STATUS;
-// }
-
-// static int get_time(void *data, uint64_t *time)
-// {
-//     assert(data != NULL);
-//     assert(time != NULL);
-
-//     generic_ltimer_t *ltimer = data;
-//     uint64_t ticks = generic_timer_get_ticks();
-//     *time = freq_cycles_and_hz_to_ns(ticks, ltimer->freq);
-//     return 0;
-// }
 
 #define KHZ (1000)
 #define MHZ (1000 * KHZ)
@@ -143,7 +102,7 @@ static inline uint64_t freq_ns_and_hz_to_cycles(uint64_t ns, uint64_t hz)
 
 void set_timeout(uint64_t timeout)
 {
-    generic_timer_set_compare(freq_ns_and_hz_to_cycles(timeout, freq));
+    generic_timer_set_compare(freq_ns_and_hz_to_cycles(timeout, timer_freq));
 }
 
 static uint64_t timeouts[MAX_TIMEOUTS];
@@ -199,7 +158,7 @@ handle_irq(microkit_channel ch)
 void init() {
     generic_timer_set_compare(UINT64_MAX);
     generic_timer_enable();
-    freq = generic_timer_get_freq();
+    timer_freq = generic_timer_get_freq();
 }
 
 void notified(microkit_channel ch) {
@@ -217,7 +176,7 @@ protected(microkit_channel ch, microkit_msginfo msginfo)
         case GET_TIME:
             // Just wants the time. Return it in nanoseconds.
             cur_ticks = get_ticks();
-            seL4_SetMR(0, freq_cycles_and_hz_to_ns(cur_ticks, freq));
+            seL4_SetMR(0, freq_cycles_and_hz_to_ns(cur_ticks, timer_freq));
             return microkit_msginfo_new(0, 1);
         case SET_TIMEOUT:
             /* The timer talks cycles, but our API is in nanoseconds.
@@ -228,7 +187,7 @@ protected(microkit_channel ch, microkit_msginfo msginfo)
              */
             // Request to set a timeout.
             rel_timeout = (uint64_t)(seL4_GetMR(0));
-            cur_ticks = freq_cycles_and_hz_to_ns(get_ticks(), freq);
+            cur_ticks = freq_cycles_and_hz_to_ns(get_ticks(), timer_freq);
             abs_timeout = cur_ticks + rel_timeout;
 
             timeouts[ch] = abs_timeout; // in nanoseconds
