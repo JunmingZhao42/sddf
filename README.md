@@ -12,7 +12,7 @@ make cake
 ## Building the sDDF
 
     $ cd echo_server
-    $ make BUILD_DIR=<path/to/build> MICROKIT_SDK=<path/to/core/platform/sdk> CAKE_COMPILER=<path/to/cake/compiler/binary> MICROKIT_BOARD=imx8mm MICROKIT_CONFIG=(release/debug)
+    $ make BUILD_DIR=<path/to/build> MICROKIT_SDK=<path/to/microkit/sdk> CAKE_COMPILER=<path/to/cake/compiler/binary> MICROKIT_BOARD=imx8mm MICROKIT_CONFIG=(release/debug)
 
 ## Notes on building Pancake
 We will need to modify an output file, and recompile. This is because of the auto-genrated assembly code outputted by the cake compiler wishing to call

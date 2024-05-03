@@ -4,3 +4,4 @@ build/
 *.depend
 .DS_Store
 .vscode
+cake-x64-64/
