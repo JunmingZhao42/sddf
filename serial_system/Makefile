@@ -55,7 +55,7 @@ all: directories $(IMAGE_FILE)
 $(BUILD_DIR)/serial.o: $(BUILD_DIR)/serial.S Makefile
 	$(CC) -c -mcpu=$(CPU) $< -o $@
 
-$(BUILD_DIR)/serial.S: serial.pnk Makefile
+$(BUILD_DIR)/serial.S: serial.🥞 Makefile
 	$(CAKE_COMPILER) --target=arm8 --pancake < $< > $@
 
 $(BUILD_DIR)/%.o: %.c Makefile
