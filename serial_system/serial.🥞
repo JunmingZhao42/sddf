@@ -1,34 +1,9 @@
 fun main() {
-  // Getting the channel that we were notified on.
-  var argc_arr = @base;
-  var argc_len = 0;
-  var arga_arr = @base + 1;
-  var arga_len = 1;
-  @get_channel(argc_arr, argc_len, arga_arr, arga_len);
-  var argc = ld8 arga_arr;
-
-  if argc == 8 {
-    // Transmit Channel
-    handle_tx();
-    return 0;
-  }
-
-  if argc == 1 {
-    // IRQ channel
-    handle_irq();
-    return 0;
-  }
-
-  if argc == 10 {
-    // Receive channel
-    handle_tx();
-    return 0;
-  }
-
+  // do nothing
   return 0;
 }
 
-fun handle_tx() {
+export fun handle_tx() {
   var c_arr = @base;
   var c_len = 1;
   st8 c_arr, 1;
@@ -106,7 +81,7 @@ fun handle_tx() {
   }
 }
 
-fun handle_rx() {
+export fun handle_rx() {
   var c_arr = @base;
   var clen = 0;
   var a_arr = @base + 1;
@@ -119,7 +94,7 @@ fun handle_rx() {
   }
 }
 
-fun handle_irq() {
+export fun handle_irq() {
   var got_char = 0;
 
   got_char = getchar();

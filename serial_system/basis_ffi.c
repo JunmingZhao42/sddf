@@ -32,6 +32,8 @@
 /* clFFI (command line) */
 
 #define IRQ_CH 1
+#define TX_CH 8
+#define RX_CH 10
 
 /* Shared Memory regions. These all have to be here to keep compiler happy */
 // Ring handle components
@@ -57,7 +59,12 @@ unsigned int argc;
 char **argv;
 
 /* exported in cake.S */
+// Entry point functions
 extern void cml_main(void);
+extern void handle_tx(void);
+extern void handle_rx(void);
+extern void handle_irq(void);
+
 extern void *cml_heap;
 extern void *cml_stack;
 extern void *cml_stackend;
@@ -546,18 +553,19 @@ void init(void) {
 
     init_post(c, clen, a, alen);
     init_pancake_mem();
+    cml_main(); // todo: can remove this
 }
 
 // Entry point that is invoked on a serial interrupt, or notifications from the server using the TX and RX channels
 void notified(microkit_channel ch) {
-
-    // Here, we want to call to cakeml main - this will be our entry point into the pancake program.
-    if (ch == 8 || ch == IRQ_CH || ch == 10) {
-        current_channel = (char) ch;
-        cml_main();
-    }
-
-    if (ch == IRQ_CH) {
+    // here are the entry points into the pancake program
+    // todo: might want to move the entire notified() function into pancake
+    if (ch == TX_CH) {
+        handle_tx();
+    } else if (ch == RX_CH) {
+        handle_rx();
+    } else if (ch == IRQ_CH) {
+        handle_irq();
         microkit_irq_ack(IRQ_CH);
     }
 }
