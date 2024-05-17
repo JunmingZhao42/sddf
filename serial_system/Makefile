@@ -56,7 +56,7 @@ $(BUILD_DIR)/serial.o: $(BUILD_DIR)/serial.S Makefile
 	$(CC) -c -mcpu=$(CPU) $< -o $@
 
 $(BUILD_DIR)/serial.S: serial.🥞 Makefile
-	$(CAKE_COMPILER) --target=arm8 --pancake < $< > $@ --main-return=true
+	$(CAKE_COMPILER) --target=arm8 --pancake < $< > $@ --main_return=true
 
 $(BUILD_DIR)/%.o: %.c Makefile
 	$(CC) -c $(CFLAGS) $< -o $@

@@ -165,6 +165,10 @@ void cml_exit(int arg) {
     microkit_dbg_puts("ERROR! We should not be getting here\n");
 }
 
+void cml_err() {
+    return;
+}
+
 /* Need to come up with a replacement for this clear cache function. Might be worth testing just flushing the entire l1 cache, but might cause issues with returning to this file*/
 void cml_clear() {
     microkit_dbg_puts("Trying to clear cache\n");
