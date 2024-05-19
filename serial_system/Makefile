@@ -48,7 +48,7 @@ CFLAGS += -I$(BOARD_DIR)/include \
 	-Iinclude	\
 	-I$(RINGBUFFERDIR)/include \
 
-SERIAL_OBJS := serial.o libsharedringbuffer/shared_ringbuffer.o basis_ffi.o
+SERIAL_OBJS := serial.o libsharedringbuffer/shared_ringbuffer.o serial_ffi.o
 SERIAL_SERVER_OBJS := serial_server.o libsharedringbuffer/shared_ringbuffer.o
 all: directories $(IMAGE_FILE)
 
