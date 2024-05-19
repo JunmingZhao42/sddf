@@ -163,6 +163,10 @@ void cml_clear() {
     microkit_dbg_puts("Trying to clear cache\n");
 }
 
+void ffiget_uart_base (unsigned char *c, long clen, unsigned char *a, long alen) {
+    a[0] = (char) uart_base;
+}
+
 /*
  * BaudRate = RefFreq / (16 * (BMR + 1)/(BIR + 1) )
  * BMR and BIR are 16 bit
@@ -339,6 +343,10 @@ void init_post(unsigned char *c, long clen, unsigned char *a, long alen) {
     regs->cr1 |= UART_CR1_RRDYEN;                /* Enable recv interrupt.            */
 }
 
+void ffinum_to_get_chars(unsigned char *c, long clen, unsigned char *a, long alen) {
+    a[0] = (char) global_serial_driver_data.num_to_get_chars;
+}
+
 void ffiserial_dequeue_avail(unsigned char *c, long clen, unsigned char *a, long alen) {
     // Dequeue from shared mem avail avail buffer
     if (clen != 1) {
@@ -393,8 +401,6 @@ void ffiserial_enqueue_used(unsigned char *c, long clen, unsigned char *a, long 
     uintptr_t buffer = byte8_to_int(&a[1]);
 
     ((char *) buffer)[0] = (char) input;
-
-    unsigned int buffer_len = 0;
 
     void *cookie = 0;
 
