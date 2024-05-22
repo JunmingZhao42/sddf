@@ -163,8 +163,39 @@ void cml_clear() {
     microkit_dbg_puts("Trying to clear cache\n");
 }
 
+void print_address(void* addr) {
+    char buf[16];
+    int i;
+    unsigned long int_addr = (unsigned long)addr;
+
+    // Convert the address to a string representation
+    for (i = 0; i < 16; i++) {
+        unsigned char nibble = (int_addr >> (4 * (15 - i))) & 0xF;
+        if (nibble < 10) {
+            buf[i] = '0' + nibble;
+        } else {
+            buf[i] = 'A' + (nibble - 10);
+        }
+    }
+
+    // Print the "0x" prefix
+    microkit_dbg_putc('0');
+    microkit_dbg_putc('x');
+
+    // Print the address string
+    for (i = 0; i < 16; i++) {
+        microkit_dbg_putc(buf[i]);
+    }
+    microkit_dbg_putc('\n');
+}
+
 void ffiget_uart_base (unsigned char *c, long clen, unsigned char *a, long alen) {
-    a[0] = (char) uart_base;
+    if (clen != 1) {
+        microkit_dbg_puts("There are no arguments supplied when args are expected");
+        c[0] = 0;
+        return;
+    }
+    *(void**) c = (void *) uart_base;
 }
 
 /*
@@ -202,7 +233,7 @@ void ffiprint_int(unsigned char *c, long clen, unsigned char *a, long alen) {
 
     microkit_dbg_puts("The address of c is -- (");
     microkit_dbg_puts(c);
-    microkit_dbg_puts("\n");
+    microkit_dbg_puts(")\n");
 
     char arg = c[0];
 

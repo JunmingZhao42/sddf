@@ -55,8 +55,12 @@ all: directories $(IMAGE_FILE)
 $(BUILD_DIR)/serial.o: $(BUILD_DIR)/serial.S Makefile
 	$(CC) -c -mcpu=$(CPU) $< -o $@
 
-$(BUILD_DIR)/serial.S: serial.🥞 Makefile
-	$(CAKE_COMPILER) --target=arm8 --pancake < $< > $@
+# Define the list of .🥞 files
+PANCAKE_FILES = serial.🥞 serial_helper.🥞
+
+# Rule to compile the .🥞 files into the target .S file
+$(BUILD_DIR)/serial.S: $(PANCAKE_FILES) Makefile
+	cat $(PANCAKE_FILES) | $(CAKE_COMPILER) --target=arm8 --pancake > $@
 
 $(BUILD_DIR)/%.o: %.c Makefile
 	$(CC) -c $(CFLAGS) $< -o $@

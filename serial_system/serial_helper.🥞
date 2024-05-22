@@ -1,0 +1,69 @@
+fun getchar() {
+    var got_char = 0;
+    var getchar_c = @base;
+    var getchar_clen = 1;
+    var getchar_a = @base + 1;
+    var getchar_alen = 0;
+    @getchar(getchar_c, getchar_clen, getchar_a, getchar_alen);
+
+    got_char = ld8 getchar_a;
+
+    return got_char;
+}
+
+////// Draft for moving ffi calls into pancake
+fun ffigetchar() {
+    var uart_base = @base;
+    @get_uart_base(uart_base, 1, uart_base, 1);
+
+    var reg = 0;
+    var c_reg = -1;
+
+    var sr2 = 0;
+    // loation of SR2, todo: don't hardcode this
+    !ldw sr2, (uart_base + 152);
+
+    if (sr2 & 1) {
+      !ldw reg, uart_base;
+      if (reg & 32768) {
+        c_reg = reg & 255;
+      }
+    }
+
+    return c_reg;
+}
+
+
+fun ffiinternal_is_tx_fifo_busy() {
+    var uart_base = @base;
+    @get_uart_base(uart_base, 1, uart_base, 1);
+
+    var sr2 = 0;
+    // loation of SR2, todo: don't hardcode this
+    !ldw sr2, (uart_base + 152);
+
+    if ((sr2 & 16384) == 0) {
+      return 1;
+    } else {
+      return 0;
+    }
+}
+
+fun ffiputchar_regs(1 c) {
+    /*
+    var uart_base = @base;
+    @get_uart_base(uart_base, 1, 0, 0);
+    var regs = 0;
+    regs = lds {1} uart_base;
+    !st8 c, regs + 64; // regs->txd
+    */
+    @putchar_regs(c, 0, 0, 0);
+    return 0;
+}
+
+fun num_to_get_chars() {
+    var num_chars = @base;
+    @num_to_get_chars(num_chars, 1, num_chars, 1);
+    var num_chars_ret = ld8 num_chars;
+    return num_chars_ret;
+}
