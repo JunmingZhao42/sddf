@@ -54,9 +54,6 @@ struct serial_driver global_serial_driver_data = {0};
 
 static char cml_memory[1024*1024*2];
 
-unsigned int argc;
-char **argv;
-
 /* exported in cake.S */
 extern void cml_main(void);
 extern void *cml_heap;
@@ -102,58 +99,6 @@ void ffipoll_sigint (unsigned char *c, long clen, unsigned char *a, long alen) {
 void ffikernel_ffi (unsigned char *c, long clen, unsigned char *a, long alen) { }
 
 #endif
-
-void ffiget_arg_count (unsigned char *c, long clen, unsigned char *a, long alen) {
-  a[0] = (char) argc;
-  a[1] = (char) (argc / 256);
-}
-
-void ffiget_arg_length (unsigned char *c, long clen, unsigned char *a, long alen) {
-  int i = a[0] + (a[1] * 256);
-  int k = 0;
-  while (argv[i][k] != 0) { k++; }
-  a[0] = (char) k;
-  a[1] = (char) (k / 256);
-}
-
-void ffiget_arg (unsigned char *c, long clen, unsigned char *a, long alen) {
-  int i = a[0] + (a[1] * 256);
-  int k = 0;
-  while (argv[i][k] != 0) {
-    a[k] = argv[i][k];
-    k++;
-  }
-}
-
-void int_to_byte2(int i, unsigned char *b){
-    /* i is encoded on 2 bytes */
-    b[0] = (i >> 8) & 0xFF;
-    b[1] = i & 0xFF;
-}
-
-int byte2_to_int(unsigned char *b){
-    return ((b[0] << 8) | b[1]);
-}
-
-void int_to_byte8(int i, unsigned char *b){
-    /* i is encoded on 8 bytes */
-    /* i is cast to long long to ensure having 64 bits */
-    /* assumes CHAR_BIT = 8. use static assertion checks? */
-    b[0] = ((long long) i >> 56) & 0xFF;
-    b[1] = ((long long) i >> 48) & 0xFF;
-    b[2] = ((long long) i >> 40) & 0xFF;
-    b[3] = ((long long) i >> 32) & 0xFF;
-    b[4] = ((long long) i >> 24) & 0xFF;
-    b[5] = ((long long) i >> 16) & 0xFF;
-    b[6] = ((long long) i >> 8) & 0xFF;
-    b[7] =  (long long) i & 0xFF;
-}
-
-int byte8_to_int(unsigned char *b){
-    return (((long long) b[0] << 56) | ((long long) b[1] << 48) |
-             ((long long) b[2] << 40) | ((long long) b[3] << 32) |
-             (b[4] << 24) | (b[5] << 16) | (b[6] << 8) | b[7]);
-}
 
 void cml_exit(int arg) {
     microkit_dbg_puts("ERROR! We should not be getting here\n");
