@@ -279,31 +279,17 @@ void ffidequeue_avail(unsigned char *c, long clen, unsigned char *a, long alen) 
     unsigned int buffer_len = 0;
     void *cookie = 0;
 
-    a[0] = dequeue_avail(ring, &buffer, &buffer_len, &cookie);
-    *(uintptr_t *) &a[1] = buffer;
+    c[0] = dequeue_avail(ring, &buffer, &buffer_len, &cookie);
+    *(uintptr_t *) &a[0] = buffer;
 }
 
-void ffiserial_enqueue_used(unsigned char *c, long clen, unsigned char *a, long alen) {
-    if (clen <= 0) {
-        microkit_dbg_puts("There are no arguments supplied when args are expected");
-        return;
-    }
-
-    bool rx_tx = c[0];
-    int input = c[1];
-
-    uintptr_t buffer = *(uintptr_t *) &a[1];
-
-    ((char *) buffer)[0] = (char) input;
-
+void ffienqueue_used(unsigned char *c, long clen, unsigned char *a, long alen) {
+    // c has the address of the ring
+    ring_handle_t *ring = *(ring_handle_t **) c;
+    // a has the address of the buffer
+    uintptr_t buffer = *(uintptr_t *) a;
     void *cookie = 0;
-
-    if (rx_tx == 0) {
-        a[0] =  enqueue_used(&rx_ring, buffer, 1, &cookie);
-    } else {
-        a[0] =  enqueue_used(&tx_ring, buffer, 1, &cookie);
-    }
-
+    a[0] = enqueue_used(ring, buffer, 1, &cookie);
 }
 
 void ffiserial_driver_dequeue_used(unsigned char *c, long clen, unsigned char *a, long alen) {

@@ -109,33 +109,21 @@ fun handle_irq() {
     return -1;
   } else {
     while true {
-      // TODO: tidy up the variables
-      var a_arr = @base + 3;
-      a_arr = serial_dequeue_avail(0);
-      if a_arr == 1 {
-        return -1;
-      }
+      var buffer_addr = @base + 32;
       var dequeue_ret = 0;
-      dequeue_ret = ld8 a_arr;
+      dequeue_ret = serial_dequeue_avail(0, buffer_addr);
+      // TODO: does it ever return -1?
       if dequeue_ret == -1 {
         return 0;
       }
       if dequeue_ret != 0 {
         return -1;
       }
-      var enqueue_c_arr = @base + 128;
-      var enqueue_clen = 2;
-      var enqueue_a_arr = @base + 256;
-      var enqueue_alen = 1;
-      st8 enqueue_c_arr, 0;
-      st8 enqueue_c_arr + 1, got_char;
-      @serial_enqueue_used(enqueue_c_arr, enqueue_clen, a_arr, enqueue_alen);
       var enqueue_ret = 0;
-      enqueue_ret = ld8 a_arr;
+      enqueue_ret = serial_enqueue_used(0, got_char, buffer_addr);
       if enqueue_ret != 0 {
         return -1;
       }
-
     }
   }
 }
