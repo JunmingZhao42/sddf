@@ -63,9 +63,53 @@ fun ffiputchar_regs(1 c) {
     return 0;
 }
 
-fun num_to_get_chars() {
-    var num_chars = @base;
-    @num_to_get_chars(num_chars, 1, num_chars, 1);
-    var num_chars_ret = ld8 num_chars;
-    return num_chars_ret;
+fun increment_num_chars() {
+	var num_c = @base;
+	@num_to_get_chars_addr(num_c,1,0,0);
+	var num_addr = 0;
+	num_addr = lds {1} num_c;
+
+	var num_to_get_chars = 0;
+	!ldw num_to_get_chars, num_addr;
+
+	num_to_get_chars = num_to_get_chars + 1;
+	!stw num_to_get_chars, num_addr;
+	return 0;
+}
+
+fun ffiserial_dequeue_avail(1 rx_tx) {
+	var num_c = @base;
+	@num_to_get_chars_addr(num_c,1,0,0);
+	var num_addr = 0;
+	num_addr = lds {1} num_c;
+
+	var num_to_get_chars = 0;
+	!ldw num_to_get_chars, num_addr;
+	if (num_to_get_chars <= 0) {
+		return 1;
+	}
+
+	var ring_c = @base + 4;
+	if (rx_tx == 0) {
+		@get_rx_ring(ring_c,1,0,0);
+	} else {
+		@get_tx_ring(ring_c,1,0,0);
+	}
+
+	var ring_addr = 0;
+	ring_addr = lds {1} ring_c;
+	var ret_addr = @base + 8;
+	@dequeue_avail(ring_addr, 0, ret_addr, 0);
+	var success = 0;
+	success = lds {1} ret_addr;
+
+	if (success != 0) {
+		// -1, means that the ring buffer is empty
+		return success;
+	} else {
+		// global_serial_driver_data.num_to_get_chars--;
+		num_to_get_chars = num_to_get_chars - 1;
+		!stw num_to_get_chars, num_addr;
+	}
+	return success;
 }

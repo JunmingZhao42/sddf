@@ -109,13 +109,31 @@ void cml_clear() {
     microkit_dbg_puts("Trying to clear cache\n");
 }
 
-void ffiget_uart_base (unsigned char *c, long clen, unsigned char *a, long alen) {
+void ffiget_uart_base(unsigned char *c, long clen, unsigned char *a, long alen) {
     if (clen != 1) {
         microkit_dbg_puts("There are no arguments supplied when args are expected");
         c[0] = 0;
         return;
     }
     *(void**) c = (void *) uart_base;
+}
+
+void ffiget_rx_ring(unsigned char *c, long clen, unsigned char *a, long alen) {
+    if (clen != 1) {
+        microkit_dbg_puts("There are no arguments supplied when args are expected");
+        c[0] = 0;
+        return;
+    }
+    *(void**) c = (void *) &rx_ring;
+}
+
+void ffiget_tx_ring(unsigned char *c, long clen, unsigned char *a, long alen) {
+    if (clen != 1) {
+        microkit_dbg_puts("There are no arguments supplied when args are expected");
+        c[0] = 0;
+        return;
+    }
+    *(void**) c = (void *) &tx_ring;
 }
 
 /*
@@ -198,19 +216,10 @@ int serial_configure(
     return 0;
 }
 
-uint8_t load_byte(const uint8_t* address) {
-    return *address;
-}
-
 // Putchar that is using the hardware FIFO buffers --> Switch to DMA later
 void ffiputchar_regs(unsigned char *c, long clen, unsigned char *a, long alen) {
     imx_uart_regs_t *regs = (imx_uart_regs_t *) uart_base;
-
     regs->txd = c[0];
-}
-
-void ffiincrement_num_chars(unsigned char *c, long clen, unsigned char *a, long alen) {
-    global_serial_driver_data.num_to_get_chars += 1;
 }
 
 void init_post(unsigned char *c, long clen, unsigned char *a, long alen) {
@@ -247,8 +256,13 @@ void init_post(unsigned char *c, long clen, unsigned char *a, long alen) {
     regs->cr1 |= UART_CR1_RRDYEN;                /* Enable recv interrupt.            */
 }
 
-void ffinum_to_get_chars(unsigned char *c, long clen, unsigned char *a, long alen) {
-    a[0] = (char) global_serial_driver_data.num_to_get_chars;
+void ffinum_to_get_chars_addr(unsigned char *c, long clen, unsigned char *a, long alen) {
+    if (clen != 1) {
+        microkit_dbg_puts("There are no arguments supplied when args are expected");
+        c[0] = 0;
+        return;
+    }
+    *(void**) c = (void*) &(global_serial_driver_data.num_to_get_chars);
 }
 
 
@@ -295,9 +309,17 @@ void ffiserial_dequeue_avail(unsigned char *c, long clen, unsigned char *a, long
         return;
     }
 
-    int_to_byte8(buffer, &a[1]);
+    *(uintptr_t *) &a[1] = buffer;
 
     global_serial_driver_data.num_to_get_chars--;
+}
+
+void ffidequeue_avail(unsigned char *c, long clen, unsigned char *a, long alen) {
+    // c is the address of the ring
+    uintptr_t buffer = 0;
+    unsigned int buffer_len = 0;
+    void *cookie = 0;
+    a[0] = dequeue_avail((ring_handle_t *) c, &buffer, &buffer_len, &cookie);
 }
 
 void ffiserial_enqueue_used(unsigned char *c, long clen, unsigned char *a, long alen) {
@@ -309,7 +331,7 @@ void ffiserial_enqueue_used(unsigned char *c, long clen, unsigned char *a, long 
     bool rx_tx = c[0];
     int input = c[1];
 
-    uintptr_t buffer = byte8_to_int(&a[1]);
+    uintptr_t buffer = *(uintptr_t *) &a[1];
 
     ((char *) buffer)[0] = (char) input;
 
@@ -362,7 +384,7 @@ void ffiserial_driver_dequeue_used(unsigned char *c, long clen, unsigned char *a
         c[0] = 1;
 
         // Copy over the length of the buffer that is to be printed
-        int_to_byte8(buffer_len, &c[1]);
+        *(unsigned int *) &c[0] = buffer_len;
     }
 }
 

@@ -34,7 +34,7 @@ fun handle_tx() {
   st8 c_arr, 1;
   var a_arr = @base + 32;
   var a_len = 1024;
-  while 1 == 1 {
+  while true {
     var ret = 0;
     @serial_driver_dequeue_used(c_arr, c_len, a_arr, a_len);
     ret = ld8 c_arr;
@@ -97,16 +97,8 @@ fun handle_tx() {
 }
 
 fun handle_rx() {
-  var c_arr = @base;
-  var clen = 0;
-  var a_arr = @base + 1;
-  var alen = 0;
-  @increment_num_chars(c_arr, clen, a_arr, alen);
-  var increment_ret = 0;
-  increment_ret = ld8 a_arr;
-  if increment_ret != 0 {
-    return -1;
-  }
+  increment_num_chars();
+  return 0;
 }
 
 fun handle_irq() {
@@ -116,7 +108,7 @@ fun handle_irq() {
   if got_char == -1 {
     return -1;
   } else {
-    while 1 == 1 {
+    while true {
       var c_arr = @base + 2;
       var c_len = 1;
       var a_arr = @base + 3;
