@@ -54,17 +54,9 @@ fun handle_tx() {
 
       var rawtx_ret = 1;
       while rawtx_ret != 0 {
-        var c_arr_uart = @base  + 1056;
-        var clen_uart = 1;
-        var a_arr_uart = @base + 1057;
-        var alen_uart = 1;
-        var temp_c_uart = @base + 1058;
-        var temp_clen_uart = 1;
-        var temp_a_uart = @base + 1059;
-        var temp_alen_uart = 1;
-        @internal_is_tx_fifo_busy(temp_c_uart, temp_clen_uart, temp_a_uart, temp_alen_uart);
+        var c_arr_uart = @base + 1056;
         var tx_fifo_ret = 0;
-        tx_fifo_ret = ld8 temp_a_uart;
+        tx_fifo_ret = internal_is_tx_fifo_busy();
         if tx_fifo_ret == 1 {
           continue;
         } else {
@@ -74,8 +66,7 @@ fun handle_tx() {
           }
           var putchar_break = 0;
           while putchar_break == 0 {
-            @internal_is_tx_fifo_busy(temp_c_uart, temp_clen_uart, temp_a_uart, temp_alen_uart);
-            tx_fifo_ret = ld8 temp_a_uart;
+            tx_fifo_ret = internal_is_tx_fifo_busy();
               if tx_fifo_ret != 1 {
               st8 c_arr_uart, temp;
               @putchar_regs(c_arr_uart,0,0,0);

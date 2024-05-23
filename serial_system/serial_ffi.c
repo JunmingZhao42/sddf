@@ -203,24 +203,6 @@ void ffiget_channel(unsigned char *c, long clen, unsigned char *a, long alen) {
     a[0] = current_channel;
 }
 
-void ffiinternal_is_tx_fifo_busy(unsigned char *c, long clen, unsigned char *a, long alen)
-{
-    imx_uart_regs_t *regs = (imx_uart_regs_t *) uart_base;
-
-    /* check the TXFE (transmit buffer FIFO empty) flag, which is cleared
-     * automatically when data is written to the TxFIFO. Even though the flag
-     * is set, the actual data transmission via the UART's 32 byte FIFO buffer
-     * might still be in progress.
-     */
-
-    int ret = (0 == (regs->sr2 & UART_SR2_TXFIFO_EMPTY));
-    if (ret) {
-        a[0] = 1;
-    } else {
-        a[0] = 0;
-    }
-}
-
 int serial_configure(
     long bps,
     int char_size,

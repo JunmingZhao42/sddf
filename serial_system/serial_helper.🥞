@@ -28,19 +28,27 @@ fun getchar() {
 }
 
 
-fun ffiinternal_is_tx_fifo_busy() {
-    var uart_base = @base;
-    @get_uart_base(uart_base, 1, uart_base, 1);
+fun internal_is_tx_fifo_busy() {
+	var uart_base = @base;
+	@get_uart_base(uart_base,1,0,0);
+	var regs = 0;
+	regs = lds {1} uart_base;
 
-    var sr2 = 0;
-    // loation of SR2, todo: don't hardcode this
-    !ldw sr2, (uart_base + 152);
+	/* check the TXFE (transmit buffer FIFO empty) flag, which is cleared
+       automatically when data is written to the TxFIFO. Even though the flag
+       is set, the actual data transmission via the UART's 32 byte FIFO buffer
+       might still be in progress.
+    */
 
-    if ((sr2 & 16384) == 0) {
-      return 1;
-    } else {
-      return 0;
-    }
+	// loation of SR2, todo: don't hardcode this
+	var sr2 = 0;
+	!ldw sr2, (regs + 152);
+
+	if ((sr2 & 16384) == 0) {
+		return 1;
+	} else {
+		return 0;
+	}
 }
 
 fun ffiputchar_regs(1 c) {
