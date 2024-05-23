@@ -272,54 +272,15 @@ void ffild_hw(unsigned char *c, long clen, unsigned char *a, long alen) {
     *(uint32_t *)c = value;
 }
 
-void ffiserial_dequeue_avail(unsigned char *c, long clen, unsigned char *a, long alen) {
-    // Dequeue from shared mem avail avail buffer
-    if (clen != 1) {
-        microkit_dbg_puts("There are no arguments supplied when args are expected");
-        a[0] = 1;
-        return;
-    }
-
-    // From our serial driver, this function is only ever called in the handle irq function
-    // to attempt to service all get char requests. Check here how many get char requests we
-    // have that are outstanding. If none are outstanding then return -1 in a array,
-    // otherwise continue with the dequeue.
-
-    if (global_serial_driver_data.num_to_get_chars <= 0) {
-        // We have no more get char requests to service.
-        a[0] = 1;
-        return;
-    }
-
-    bool rx_tx = c[0];
-
-    void *cookie = 0;
-
-    // Address that we will pass to dequeue to store the buffer address
-    uintptr_t buffer = 0;
-    // Integer to store the length of the buffer
-    unsigned int buffer_len = 0;
-
-    if (rx_tx == 0) {
-        a[0] = dequeue_avail(&rx_ring, &buffer, &buffer_len, &cookie);
-    } else {
-        a[0] = dequeue_avail(&tx_ring, &buffer, &buffer_len, &cookie);
-    }
-    if (a[0] != 0) {
-        return;
-    }
-
-    *(uintptr_t *) &a[1] = buffer;
-
-    global_serial_driver_data.num_to_get_chars--;
-}
-
 void ffidequeue_avail(unsigned char *c, long clen, unsigned char *a, long alen) {
-    // c is the address of the ring
+    // c has the address of the ring
+    ring_handle_t *ring = *(ring_handle_t **) c;
     uintptr_t buffer = 0;
     unsigned int buffer_len = 0;
     void *cookie = 0;
-    a[0] = dequeue_avail((ring_handle_t *) c, &buffer, &buffer_len, &cookie);
+
+    a[0] = dequeue_avail(ring, &buffer, &buffer_len, &cookie);
+    *(uintptr_t *) &a[1] = buffer;
 }
 
 void ffiserial_enqueue_used(unsigned char *c, long clen, unsigned char *a, long alen) {

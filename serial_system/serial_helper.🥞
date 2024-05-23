@@ -77,7 +77,12 @@ fun increment_num_chars() {
 	return 0;
 }
 
-fun ffiserial_dequeue_avail(1 rx_tx) {
+fun serial_dequeue_avail(1 rx_tx) {
+	/* From our serial driver, this function is only ever called in the handle irq function
+       to attempt to service all get char requests. Check here how many get char requests we
+       have that are outstanding. If none are outstanding then return -1 in a array,
+       otherwise continue with the dequeue.
+	*/
 	var num_c = @base;
 	@num_to_get_chars_addr(num_c,1,0,0);
 	var num_addr = 0;
@@ -89,6 +94,7 @@ fun ffiserial_dequeue_avail(1 rx_tx) {
 		return 1;
 	}
 
+	// got some chars to get
 	var ring_c = @base + 4;
 	if (rx_tx == 0) {
 		@get_rx_ring(ring_c,1,0,0);
@@ -96,20 +102,17 @@ fun ffiserial_dequeue_avail(1 rx_tx) {
 		@get_tx_ring(ring_c,1,0,0);
 	}
 
-	var ring_addr = 0;
-	ring_addr = lds {1} ring_c;
 	var ret_addr = @base + 8;
-	@dequeue_avail(ring_addr, 0, ret_addr, 0);
+	@dequeue_avail(ring_c, 0, ret_addr, 0);
 	var success = 0;
-	success = lds {1} ret_addr;
-
+	success = ld8 ret_addr;
 	if (success != 0) {
 		// -1, means that the ring buffer is empty
-		return success;
+		return ret_addr;
 	} else {
 		// global_serial_driver_data.num_to_get_chars--;
 		num_to_get_chars = num_to_get_chars - 1;
 		!stw num_to_get_chars, num_addr;
 	}
-	return success;
+	return ret_addr;
 }

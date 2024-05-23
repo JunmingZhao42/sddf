@@ -109,13 +109,12 @@ fun handle_irq() {
     return -1;
   } else {
     while true {
-      var c_arr = @base + 2;
-      var c_len = 1;
+      // TODO: tidy up the variables
       var a_arr = @base + 3;
-      var a_len = 1;
-      st8 c_arr, 0;
-      st8 a_arr, 0;
-      @serial_dequeue_avail(c_arr, c_len, a_arr, a_len);
+      a_arr = serial_dequeue_avail(0);
+      if a_arr == 1 {
+        return -1;
+      }
       var dequeue_ret = 0;
       dequeue_ret = ld8 a_arr;
       if dequeue_ret == -1 {
@@ -127,7 +126,7 @@ fun handle_irq() {
       var enqueue_c_arr = @base + 128;
       var enqueue_clen = 2;
       var enqueue_a_arr = @base + 256;
-      var enqueue_alen = a_len;
+      var enqueue_alen = 1;
       st8 enqueue_c_arr, 0;
       st8 enqueue_c_arr + 1, got_char;
       @serial_enqueue_used(enqueue_c_arr, enqueue_clen, a_arr, enqueue_alen);
