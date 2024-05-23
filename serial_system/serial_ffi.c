@@ -15,6 +15,7 @@
 #include "serial.h"
 #include "shared_ringbuffer.h"
 #include "serial_driver_data.h"
+#include "debug.h"
 
 #ifdef EVAL
 #include <sys/time.h>
@@ -163,32 +164,6 @@ void cml_clear() {
     microkit_dbg_puts("Trying to clear cache\n");
 }
 
-void print_address(void* addr) {
-    char buf[16];
-    int i;
-    unsigned long int_addr = (unsigned long)addr;
-
-    // Convert the address to a string representation
-    for (i = 0; i < 16; i++) {
-        unsigned char nibble = (int_addr >> (4 * (15 - i))) & 0xF;
-        if (nibble < 10) {
-            buf[i] = '0' + nibble;
-        } else {
-            buf[i] = 'A' + (nibble - 10);
-        }
-    }
-
-    // Print the "0x" prefix
-    microkit_dbg_putc('0');
-    microkit_dbg_putc('x');
-
-    // Print the address string
-    for (i = 0; i < 16; i++) {
-        microkit_dbg_putc(buf[i]);
-    }
-    microkit_dbg_putc('\n');
-}
-
 void ffiget_uart_base (unsigned char *c, long clen, unsigned char *a, long alen) {
     if (clen != 1) {
         microkit_dbg_puts("There are no arguments supplied when args are expected");
@@ -226,20 +201,6 @@ void ffiget_channel(unsigned char *c, long clen, unsigned char *a, long alen) {
     }
 
     a[0] = current_channel;
-}
-
-/* Debug functions */
-void ffiprint_int(unsigned char *c, long clen, unsigned char *a, long alen) {
-
-    microkit_dbg_puts("The address of c is -- (");
-    microkit_dbg_puts(c);
-    microkit_dbg_puts(")\n");
-
-    char arg = c[0];
-
-    microkit_dbg_puts("We received the following int --- (");
-    microkit_dbg_puts(arg);
-    microkit_dbg_puts(")\n");
 }
 
 void ffiinternal_is_tx_fifo_busy(unsigned char *c, long clen, unsigned char *a, long alen)
@@ -310,23 +271,8 @@ int serial_configure(
     return 0;
 }
 
-void ffigetchar(unsigned char *c, long clen, unsigned char *a, long alen)
-{
-    imx_uart_regs_t *regs = (imx_uart_regs_t *) uart_base;
-
-    uint32_t reg = 0;
-    int c_reg = -1;
-
-    if (regs->sr2 & UART_SR2_RXFIFO_RDR) {
-        reg = regs->rxd;
-        if (reg & UART_URXD_READY_MASK) {
-            c_reg = reg & UART_BYTE_MASK;
-        }
-    }
-
-    char got_char = (char) c_reg;
-
-    a[0]= got_char;
+uint8_t load_byte(const uint8_t* address) {
+    return *address;
 }
 
 // Putchar that is using the hardware FIFO buffers --> Switch to DMA later
@@ -376,6 +322,13 @@ void init_post(unsigned char *c, long clen, unsigned char *a, long alen) {
 
 void ffinum_to_get_chars(unsigned char *c, long clen, unsigned char *a, long alen) {
     a[0] = (char) global_serial_driver_data.num_to_get_chars;
+}
+
+
+// helper function to load half word, should be replaced later by pancake ldhw
+void ffild_hw(unsigned char *c, long clen, unsigned char *a, long alen) {
+    uint32_t value = *(uint32_t *)a;
+    *(uint32_t *)c = value;
 }
 
 void ffiserial_dequeue_avail(unsigned char *c, long clen, unsigned char *a, long alen) {

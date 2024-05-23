@@ -48,7 +48,7 @@ CFLAGS += -I$(BOARD_DIR)/include \
 	-Iinclude	\
 	-I$(RINGBUFFERDIR)/include \
 
-SERIAL_OBJS := serial.o libsharedringbuffer/shared_ringbuffer.o serial_ffi.o
+SERIAL_OBJS := serial.o libsharedringbuffer/shared_ringbuffer.o serial_ffi.o debug.o
 SERIAL_SERVER_OBJS := serial_server.o libsharedringbuffer/shared_ringbuffer.o
 all: directories $(IMAGE_FILE)
 
@@ -58,13 +58,14 @@ $(BUILD_DIR)/serial.o: $(BUILD_DIR)/serial.S Makefile
 # Define the list of .🥞 files
 PANCAKE_FILES = serial.🥞 serial_helper.🥞
 
-# Rule to compile the .🥞 files into the target .S file
 $(BUILD_DIR)/serial.S: $(PANCAKE_FILES) Makefile
 	cat $(PANCAKE_FILES) | $(CAKE_COMPILER) --target=arm8 --pancake > $@
 
 $(BUILD_DIR)/%.o: %.c Makefile
 	$(CC) -c $(CFLAGS) $< -o $@
 
+$(BUILD_DIR)/debug.o: debug.c debug.h Makefile
+	$(CC) -c $(CFLAGS) $< -o $@
 
 $(BUILD_DIR)/serial.elf: $(addprefix $(BUILD_DIR)/, $(SERIAL_OBJS))
 	$(LD) $(LDFLAGS) $^ $(LIBS) -o $@

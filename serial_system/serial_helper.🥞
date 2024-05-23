@@ -1,31 +1,25 @@
 fun getchar() {
-    var got_char = 0;
-    var getchar_c = @base;
-    var getchar_clen = 1;
-    var getchar_a = @base + 1;
-    var getchar_alen = 0;
-    @getchar(getchar_c, getchar_clen, getchar_a, getchar_alen);
-
-    got_char = ld8 getchar_a;
-
-    return got_char;
-}
-
-////// Draft for moving ffi calls into pancake
-fun ffigetchar() {
     var uart_base = @base;
-    @get_uart_base(uart_base, 1, uart_base, 1);
+    @get_uart_base(uart_base,1,0,0);
+    var regs = 0;
+    regs = lds {1} uart_base;
 
     var reg = 0;
     var c_reg = -1;
 
+    // loation of SR2, TODO: don't hardcode this
     var sr2 = 0;
-    // loation of SR2, todo: don't hardcode this
-    !ldw sr2, (uart_base + 152);
+    !ld8 sr2, (regs + 152);
 
+    // sr2 & UART_SR2_RXFIFO_RDR BIT(1)
     if (sr2 & 1) {
-      !ldw reg, uart_base;
-      if (reg & 32768) {
+      // TODO: ldw triggers segfault here
+      var reg_b = @base;
+      @ld_hw(reg_b, 1, regs, 1);
+      reg = lds {1} reg_b;
+      // reg & UART_URXD_READY_MASK BIT(15) 0x8000
+      if ((reg & 32768) != 0) {
+        // UART_BYTE_MASK 0xFF
         c_reg = reg & 255;
       }
     }
