@@ -1,117 +1,118 @@
 fun main() {
-  // Getting the channel that we were notified on.
-  var argc_arr = @base;
-  var argc_len = 0;
-  var arga_arr = @base + 1;
-  var arga_len = 1;
-  @get_channel(argc_arr, argc_len, arga_arr, arga_len);
-  var argc = ld8 arga_arr;
+	// Getting the channel that we were notified on.
+	var argc_arr = @base;
+	var argc_len = 0;
+	var arga_arr = @base + 1;
+	var arga_len = 1;
+	@get_channel(argc_arr, argc_len, arga_arr, arga_len);
+	var argc = ld8 arga_arr;
 
-  if argc == 8 {
-    // Transmit Channel
-    handle_tx();
-    return 0;
-  }
+	if argc == 8 {
+		// Transmit Channel
+		handle_tx();
+		return 0;
+	}
 
-  if argc == 1 {
-    // IRQ channel
-    handle_irq();
-    return 0;
-  }
+	if argc == 1 {
+		// IRQ channel
+		handle_irq();
+		return 0;
+	}
 
-  if argc == 10 {
-    // Receive channel
-    handle_tx();
-    return 0;
-  }
+	if argc == 10 {
+		// Receive channel
+		handle_tx();
+		return 0;
+	}
 
-  return 0;
+	return 0;
 }
 
 fun handle_tx() {
-  var buffer_addr = @base + 32;
-  while true {
-    var ret = 0;
-    ret = serial_driver_dequeue_used(1, buffer_addr);
-    if ret == 0 {
-      break;
-    }
-    var buff_len = 0;
-    var phys = buffer_addr;
-    var i = 0;
-    var temp = 1;
-    while temp > 0 {
-      temp = ld8 phys;
+	var buffer_addr = @base + 32;
+	while true {
+		var ret = 0;
+		// 1: dequeue_used tx
+		ret = serial_driver_dequeue_used(1, buffer_addr);
+		if (ret == 0) {
+			break;
+		}
+		var buff_len = 0;
+		var phys = buffer_addr;
+		var i = 0;
+		var temp = 1;
+		while (temp > 0) {
+			temp = ld8 phys;
+			if (temp < 1) {
+				break;
+			}
 
-      if temp < 1 {
-        break;
-      }
+			var rawtx_ret = 1;
+			while (rawtx_ret != 0) {
+				var tx_fifo_ret = 0;
+				tx_fifo_ret = internal_is_tx_fifo_busy();
+				if (tx_fifo_ret == 1) {
+					continue;
+				} else {
+					if (temp == 10) {
+					// 13: '\n'
+					putchar_regs(13);
+					}
+					var putchar_break = 0;
+					while (putchar_break == 0) {
+					tx_fifo_ret = internal_is_tx_fifo_busy();
+						if (tx_fifo_ret != 1) {
+							putchar_regs(temp);
+							putchar_break = 1;
+						}
+					}
 
-      var rawtx_ret = 1;
-      while rawtx_ret != 0 {
-        var tx_fifo_ret = 0;
-        tx_fifo_ret = internal_is_tx_fifo_busy();
-        if tx_fifo_ret == 1 {
-          continue;
-        } else {
-          if temp == 10 {
-            putchar_regs(13);
-          }
-          var putchar_break = 0;
-          while putchar_break == 0 {
-            tx_fifo_ret = internal_is_tx_fifo_busy();
-              if tx_fifo_ret != 1 {
-                putchar_regs(temp);
-                putchar_break = 1;
-            }
-          }
+					rawtx_ret = 0;
+				}
+			}
 
-          rawtx_ret = 0;
-        }
-      }
+			i = i + 1;
+			phys = phys + 1;
+		}
 
-      i = i + 1;
-      phys = phys + 1;
-    }
-
-    var ret2 = 0;
-    ret2 = serial_enqueue_avail(1);
-    if ret2 != 0 {
-      return -1;
-    } else {
-      return 0;
-    }
-  }
+		var ret2 = 0;
+		// 1: enqueue_avail tx
+		ret2 = serial_enqueue_avail(1);
+		if (ret2 != 0) {
+			return -1;
+		} else {
+			return 0;
+		}
+	}
 }
 
 fun handle_rx() {
-  increment_num_chars();
-  return 0;
+	increment_num_chars();
+  	return 0;
 }
 
 fun handle_irq() {
-  var got_char = 0;
+	var got_char = 0;
+	got_char = getchar();
 
-  got_char = getchar();
-  if got_char == -1 {
-    return -1;
-  } else {
-    while true {
-      var buffer_addr = @base + 32;
-      var dequeue_ret = 0;
-      dequeue_ret = serial_dequeue_avail(0, buffer_addr);
-      // TODO: does it ever return -1?
-      if dequeue_ret == -1 {
-        return 0;
-      }
-      if dequeue_ret != 0 {
-        return -1;
-      }
-      var enqueue_ret = 0;
-      enqueue_ret = serial_enqueue_used(0, got_char, buffer_addr);
-      if enqueue_ret != 0 {
-        return -1;
-      }
-    }
-  }
+	if (got_char == -1) {
+		return -1;
+	} else {
+		while true {
+			var buffer_addr = @base + 32;
+			var dequeue_ret = 0;
+			// 0: dequeue_avail rx
+			dequeue_ret = serial_dequeue_avail(0, buffer_addr);
+			if (dequeue_ret != 0) {
+				// dequeue_avail ring is empty
+				return -1;
+			}
+			var enqueue_ret = 0;
+			// 0: enqueue_used rx
+			enqueue_ret = serial_enqueue_used(0, got_char, buffer_addr);
+			if (enqueue_ret != 0) {
+				return -1;
+			}
+		}
+	}
 }

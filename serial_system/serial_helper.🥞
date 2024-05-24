@@ -1,42 +1,34 @@
-////// General Util Functions
-// copy N bytes from src to dest
-// len is the number of bytes to copy
-fun pnk_memcpy(1 dst, 1 src, 1 len) {
-	var i = 0;
-    var c = 0;
-    while (i < len) {
-        !ld8 c, (src + i);
-        !st8 c, (dst + i);
-        i = i + 1;
-    }
-	return 0;
-}
-//////
-
-fun getchar() {
-    var uart_base = @base;
-    @get_uart_base(uart_base,1,0,0);
+/* Return the address of the UART registers */
+fun get_uart_base() {
+	var uart_base = @base;
+    @get_uart_base(0, 0, uart_base, 1);
     var regs = 0;
     regs = lds {1} uart_base;
+	return regs;
+}
+
+/* Return the character in uart_base->rxd (receiver register) */
+fun getchar() {
+    var regs = 0;
+	regs = get_uart_base();
 
     var reg = 0;
     var c_reg = -1;
-
     // loation of SR2, TODO: don't hardcode this
     var sr2 = 0;
     !ld8 sr2, (regs + 152);
 
     // sr2 & UART_SR2_RXFIFO_RDR BIT(1)
     if (sr2 & 1) {
-      // TODO: ldw triggers segfault here
-      var reg_b = @base;
-      @ld_hw(reg_b, 1, regs, 1);
-      reg = lds {1} reg_b;
-      // reg & UART_URXD_READY_MASK BIT(15) 0x8000
-      if ((reg & 32768) != 0) {
-        // UART_BYTE_MASK 0xFF
-        c_reg = reg & 255;
-      }
+		// TODO: ldw triggers segfault here
+		var reg_b = @base;
+		@ld_hw(regs, 1, reg_b, 1);
+		reg = lds {1} reg_b;
+		// reg & UART_URXD_READY_MASK BIT(15) 0x8000
+		if ((reg & 32768) != 0) {
+			// UART_BYTE_MASK 0xFF
+			c_reg = reg & 255;
+		}
     }
 
     return c_reg;
@@ -44,10 +36,8 @@ fun getchar() {
 
 
 fun internal_is_tx_fifo_busy() {
-	var uart_base = @base;
-	@get_uart_base(uart_base,1,0,0);
-	var regs = 0;
-	regs = lds {1} uart_base;
+    var regs = 0;
+	regs = get_uart_base();
 
 	/* check the TXFE (transmit buffer FIFO empty) flag, which is cleared
        automatically when data is written to the TxFIFO. Even though the flag
@@ -68,25 +58,37 @@ fun internal_is_tx_fifo_busy() {
 
 // Putchar that is using the hardware FIFO buffers --> Switch to DMA later
 fun putchar_regs(1 c) {
-    var uart_base = @base;
-    @get_uart_base(uart_base, 1, 0, 0);
     var regs = 0;
-    regs = lds {1} uart_base;
+	regs = get_uart_base();
 
     !st8 c, regs + 64; // regs->txd
     return 0;
 }
 
 fun increment_num_chars() {
-	var num_c = @base;
-	@num_to_get_chars_addr(num_c,1,0,0);
+	var num_base = @base;
+	@num_to_get_chars_addr(0, 0, num_base, 1);
 	var num_addr = 0;
-	num_addr = lds {1} num_c;
+	num_addr = lds {1} num_base;
 
 	var num_to_get_chars = 0;
 	!ldw num_to_get_chars, num_addr;
 
 	num_to_get_chars = num_to_get_chars + 1;
+	!stw num_to_get_chars, num_addr;
+	return 0;
+}
+
+fun decrement_num_chars() {
+	var num_base = @base;
+	@num_to_get_chars_addr(0, 0, num_base, 1);
+	var num_addr = 0;
+	num_addr = lds {1} num_base;
+
+	var num_to_get_chars = 0;
+	!ldw num_to_get_chars, num_addr;
+
+	num_to_get_chars = num_to_get_chars - 1;
 	!stw num_to_get_chars, num_addr;
 	return 0;
 }
@@ -97,33 +99,31 @@ fun serial_dequeue_avail(1 rx_tx, 1 buffer_addr) {
        have that are outstanding. If none are outstanding then return -1 in a array,
        otherwise continue with the dequeue.
 	*/
-	var num_c = @base;
-	@num_to_get_chars_addr(num_c,1,0,0);
+	var num_base = @base;
+	@num_to_get_chars_addr(0, 0, num_base, 1);
 	var num_addr = 0;
-	num_addr = lds {1} num_c;
-
+	num_addr = lds {1} num_base;
 	var num_to_get_chars = 0;
 	!ldw num_to_get_chars, num_addr;
+
 	if (num_to_get_chars <= 0) {
 		return 1;
 	}
 
 	// got some chars to get
-	var ring_c = @base + 4;
+	var ring_base = @base + 4;
 	if (rx_tx == 0) {
-		@get_rx_ring(ring_c,1,0,0);
+		@get_rx_ring(0, 0, ring_base, 1);
 	} else {
-		@get_tx_ring(ring_c,1,0,0);
+		@get_tx_ring(0, 0, ring_base, 1);
 	}
 
-	@dequeue_avail(ring_c, 0, buffer_addr, 0);
-	// ring_c now contains the dequeue result
+	@dequeue_avail(ring_base, 1, buffer_addr, 1);
+	// ring_base now contains the dequeue result
 	var success = 0;
-	success = ld8 ring_c;
+	success = ld8 ring_base;
 	if (success == 0) {
-		// global_serial_driver_data.num_to_get_chars--;
-		num_to_get_chars = num_to_get_chars - 1;
-		!stw num_to_get_chars, num_addr;
+		decrement_num_chars();
 	}
 	// succuss != 0 means the buffer was empty
 	return success;
@@ -134,39 +134,39 @@ fun serial_enqueue_used(1 rx_tx, 1 input, 1 buffer_addr) {
 	buffer = lds {1} buffer_addr;
 	!st8 input, buffer;
 
-	var ring_c = @base;
+	var ring_base = @base;
 	if (rx_tx == 0) {
-		@get_rx_ring(ring_c,1,0,0);
+		@get_rx_ring(0, 0, ring_base, 1);
 	} else {
-		@get_tx_ring(ring_c,1,0,0);
+		@get_tx_ring(0, 0, ring_base, 1);
 	}
 
-	@enqueue_used(ring_c, 0, buffer_addr, 0);
-	// ring_c now contains the enqueue result
+	@enqueue_used(ring_base, 1, buffer_addr, 1);
+	// ring_base now contains the enqueue result
 	var ret = 0;
-	ret = ld8 ring_c;
+	ret = ld8 ring_base;
 	return ret;
 }
 
 fun serial_driver_dequeue_used(1 rx_tx, 1 copy_dst) {
-	var ring_c = @base;
+	var ring_base = @base;
 	if (rx_tx == 0) {
-		@get_rx_ring(ring_c,1,0,0);
+		@get_rx_ring(0, 0, ring_base, 1);
 	} else {
-		@get_tx_ring(ring_c,1,0,0);
+		@get_tx_ring(0, 0, ring_base, 1);
 	}
 
 	var buffer_addr = @base + 16;
-	@driver_dequeue(ring_c,0,buffer_addr,0);
-	// ring_c now contains the dequeue result
+	@driver_dequeue(ring_base, 1, buffer_addr, 1);
+	// ring_base now contains the dequeue result
 	var ret = 0;
-	ret = ld8 ring_c;
+	ret = ld8 ring_base;
 
 	if (ret != 0) {
 		return 0;
 	} else {
 		var buffer_len = 0;
-		buffer_len = lds {1} ring_c + 4;
+		buffer_len = lds {1} ring_base + 4;
 		if (buffer_len > 1024) {
 			return -1;
 		}
@@ -180,16 +180,16 @@ fun serial_driver_dequeue_used(1 rx_tx, 1 copy_dst) {
 }
 
 fun serial_enqueue_avail(1 rx_tx) {
-	var ring_c = @base;
+	var ring_base = @base;
 	if (rx_tx == 0) {
-		@get_rx_ring(ring_c,1,0,0);
+		@get_rx_ring(0, 0, ring_base, 1);
 	} else {
-		@get_tx_ring(ring_c,1,0,0);
+		@get_tx_ring(0, 0, ring_base, 1);
 	}
 
-	@enqueue_avail(ring_c,0,0,0);
-	// ring_c now contains the enqueue result
+	@enqueue_avail(ring_base, 1, 0, 0);
+	// ring_base now contains the enqueue result
 	var ret = 0;
-	ret = ld8 ring_c;
+	ret = ld8 ring_base;
 	return ret;
 }

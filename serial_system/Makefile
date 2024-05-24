@@ -56,7 +56,7 @@ $(BUILD_DIR)/serial.o: $(BUILD_DIR)/serial.S Makefile
 	$(CC) -c -mcpu=$(CPU) $< -o $@
 
 # Define the list of .🥞 files
-PANCAKE_FILES = serial.🥞 serial_helper.🥞
+PANCAKE_FILES = serial.🥞 serial_helper.🥞 util.🥞
 
 $(BUILD_DIR)/serial.S: $(PANCAKE_FILES) Makefile
 	cat $(PANCAKE_FILES) | $(CAKE_COMPILER) --target=arm8 --pancake > $@

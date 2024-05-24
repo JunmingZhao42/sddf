@@ -110,30 +110,39 @@ void cml_clear() {
 }
 
 void ffiget_uart_base(unsigned char *c, long clen, unsigned char *a, long alen) {
-    if (clen != 1) {
-        microkit_dbg_puts("There are no arguments supplied when args are expected");
-        c[0] = 0;
+    if (clen != 0 || alen != 1) {
+        microkit_dbg_puts("get_uart_base: There are no arguments supplied when args are expected");
+        a[0] = 0;
         return;
     }
-    *(void**) c = (void *) uart_base;
+    *(void**) a = (void *) uart_base;
 }
 
 void ffiget_rx_ring(unsigned char *c, long clen, unsigned char *a, long alen) {
-    if (clen != 1) {
-        microkit_dbg_puts("There are no arguments supplied when args are expected");
-        c[0] = 0;
+    if (clen != 0 || alen != 1) {
+        microkit_dbg_puts("get_rx_ring: There are no arguments supplied when args are expected");
+        a[0] = 0;
         return;
     }
-    *(void**) c = (void *) &rx_ring;
+    *(void**) a = (void *) &rx_ring;
 }
 
 void ffiget_tx_ring(unsigned char *c, long clen, unsigned char *a, long alen) {
-    if (clen != 1) {
-        microkit_dbg_puts("There are no arguments supplied when args are expected");
-        c[0] = 0;
+    if (clen != 0 || alen != 1) {
+        microkit_dbg_puts("get_tx_ring: There are no arguments supplied when args are expected");
+        a[0] = 0;
         return;
     }
-    *(void**) c = (void *) &tx_ring;
+    *(void**) a = (void *) &tx_ring;
+}
+
+void ffinum_to_get_chars_addr(unsigned char *c, long clen, unsigned char *a, long alen) {
+    if (clen != 0 || alen != 1) {
+        microkit_dbg_puts("num_to_get_chars_addr: There are no arguments supplied when args are expected");
+        a[0] = 0;
+        return;
+    }
+    *(void**) a = (void*) &(global_serial_driver_data.num_to_get_chars);
 }
 
 /*
@@ -238,7 +247,7 @@ void init_post(unsigned char *c, long clen, unsigned char *a, long alen) {
         microkit_dbg_puts("Error occured during line configuration\n");
     }
 
-        /* Enable the UART */
+    /* Enable the UART */
     regs->cr1 |= UART_CR1_UARTEN;                /* Enable The uart.                  */
     regs->cr2 |= UART_CR2_RXEN | UART_CR2_TXEN;  /* RX/TX enable                      */
     regs->cr2 |= UART_CR2_IRTS;                  /* Ignore RTS                        */
@@ -250,23 +259,27 @@ void init_post(unsigned char *c, long clen, unsigned char *a, long alen) {
     regs->cr1 |= UART_CR1_RRDYEN;                /* Enable recv interrupt.            */
 }
 
-void ffinum_to_get_chars_addr(unsigned char *c, long clen, unsigned char *a, long alen) {
-    if (clen != 1) {
-        microkit_dbg_puts("There are no arguments supplied when args are expected");
+/*
+    * helper function to load half word, TODO: should be replaced later by pancake
+    * c: memory address
+    * a: pointer to the result
+*/
+void ffild_hw(unsigned char *c, long clen, unsigned char *a, long alen) {
+    if (clen != 1 || alen != 1) {
+        microkit_dbg_puts("ld_hw: There are no arguments supplied when args are expected");
         c[0] = 0;
         return;
     }
-    *(void**) c = (void*) &(global_serial_driver_data.num_to_get_chars);
-}
-
-
-// helper function to load half word, should be replaced later by pancake ldhw
-void ffild_hw(unsigned char *c, long clen, unsigned char *a, long alen) {
-    uint32_t value = *(uint32_t *)a;
-    *(uint32_t *)c = value;
+    uint32_t value = *(uint32_t *)c;
+    *(uint32_t *) a = value;
 }
 
 void ffidequeue_avail(unsigned char *c, long clen, unsigned char *a, long alen) {
+    if (clen != 1 || alen != 1) {
+        microkit_dbg_puts("dequeue_avail: There are no arguments supplied when args are expected");
+        a[0] = 0;
+        return;
+    }
     // c has the address of the ring
     ring_handle_t *ring = *(ring_handle_t **) c;
     uintptr_t buffer = 0;
@@ -278,6 +291,11 @@ void ffidequeue_avail(unsigned char *c, long clen, unsigned char *a, long alen) 
 }
 
 void ffienqueue_used(unsigned char *c, long clen, unsigned char *a, long alen) {
+    if (clen != 1 || alen != 1) {
+        microkit_dbg_puts("enqueue_used: There are no arguments supplied when args are expected");
+        a[0] = 0;
+        return;
+    }
     // c has the address of the ring
     ring_handle_t *ring = *(ring_handle_t **) c;
     // a has the address of the buffer
@@ -287,6 +305,11 @@ void ffienqueue_used(unsigned char *c, long clen, unsigned char *a, long alen) {
 }
 
 void ffidriver_dequeue(unsigned char *c, long clen, unsigned char *a, long alen) {
+    if (clen != 1 || alen != 1) {
+        microkit_dbg_puts("driver_dequeue: There are no arguments supplied when args are expected");
+        c[0] = 1;
+        return;
+    }
     // c has the address of the ring
     ring_handle_t *ring = *(ring_handle_t **) c;
     void *cookie = 0;
@@ -298,57 +321,17 @@ void ffidriver_dequeue(unsigned char *c, long clen, unsigned char *a, long alen)
 }
 
 void ffienqueue_avail(unsigned char *c, long clen, unsigned char *a, long alen) {
+    if (clen != 1 || alen != 0) {
+        microkit_dbg_puts("enqueue_avail: There are no arguments supplied when args are expected");
+        c[0] = -1;
+        return;
+    }
     // c has the address of the ring
     ring_handle_t *ring = *(ring_handle_t **) c;
     void *cookie = 0;
     uintptr_t buffer = 0;
     unsigned int buffer_len = 0;
     c[0] = enqueue_avail(ring, &buffer, &buffer_len, cookie);
-}
-
-void ffidequeue_enqueue_avail(unsigned char *c, long clen, unsigned char *a, long alen) {
-    // Dequeue from shared mem avail avail buffer
-    if (clen != 1) {
-        microkit_dbg_puts("There are no arguments supplied when args are expected");
-        a[0] = 1;
-        return;
-    }
-
-    // From our serial driver, this function is only ever called in the handle irq function
-    // to attempt to service all get char requests. Check here how many get char requests we
-    // have that are outstanding. If none are outstanding then return -1 in a array,
-    // otherwise continue with the dequeue.
-
-    if (global_serial_driver_data.num_to_get_chars <= 0) {
-        // We have no more get char requests to service.
-        microkit_dbg_puts("No requests for get char outstanding\n");
-        a[0] = -1;
-        return;
-    }
-
-    void *cookie = 0;
-
-    // Address that we will pass to dequeue to store the buffer address
-    uintptr_t buffer = 0;
-    // Integer to store the length of the buffer
-    unsigned int buffer_len = 0;
-
-    a[0] = dequeue_avail(&rx_ring, &buffer, &buffer_len, &cookie);
-
-    if (a[0] != 0) {
-        return;
-    }
-
-    // For now pass buffer addresses through the alen value
-    // alen = buffer;
-    global_serial_driver_data.num_to_get_chars--;
-
-    int input = c[1];
-
-    ((char *) buffer)[0] = (char) input;
-
-    a[0] =  enqueue_used(&rx_ring, buffer, 1, &cookie);
-
 }
 
 void init_pancake_mem() {
