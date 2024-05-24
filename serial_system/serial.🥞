@@ -29,20 +29,15 @@ fun main() {
 }
 
 fun handle_tx() {
-  var c_arr = @base;
-  var c_len = 1;
-  st8 c_arr, 1;
-  var a_arr = @base + 32;
-  var a_len = 1024;
+  var buffer_addr = @base + 32;
   while true {
     var ret = 0;
-    @serial_driver_dequeue_used(c_arr, c_len, a_arr, a_len);
-    ret = ld8 c_arr;
+    ret = serial_driver_dequeue_used(1, buffer_addr);
     if ret == 0 {
       break;
     }
     var buff_len = 0;
-    var phys = @base + 32;
+    var phys = buffer_addr;
     var i = 0;
     var temp = 1;
     while temp > 0 {

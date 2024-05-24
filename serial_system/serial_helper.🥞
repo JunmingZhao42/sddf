@@ -1,3 +1,18 @@
+////// General Util Functions
+// copy N bytes from src to dest
+// len is the number of bytes to copy
+fun pnk_memcpy(1 dst, 1 src, 1 len) {
+	var i = 0;
+    var c = 0;
+    while (i < len) {
+        !ld8 c, (src + i);
+        !st8 c, (dst + i);
+        i = i + 1;
+    }
+	return 0;
+}
+//////
+
 fun getchar() {
     var uart_base = @base;
     @get_uart_base(uart_base,1,0,0);
@@ -131,6 +146,37 @@ fun serial_enqueue_used(1 rx_tx, 1 input, 1 buffer_addr) {
 	var ret = 0;
 	ret = ld8 ring_c;
 	return ret;
+}
+
+fun serial_driver_dequeue_used(1 rx_tx, 1 copy_dst) {
+	var ring_c = @base;
+	if (rx_tx == 0) {
+		@get_rx_ring(ring_c,1,0,0);
+	} else {
+		@get_tx_ring(ring_c,1,0,0);
+	}
+
+	var buffer_addr = @base + 16;
+	@driver_dequeue(ring_c,0,buffer_addr,0);
+	// ring_c now contains the dequeue result
+	var ret = 0;
+	ret = ld8 ring_c;
+
+	if (ret != 0) {
+		return 0;
+	} else {
+		var buffer_len = 0;
+		buffer_len = lds {1} ring_c + 4;
+		if (buffer_len > 1024) {
+			return -1;
+		}
+		if (buffer_len > 0) {
+			var buffer = 0;
+			buffer = lds {1} buffer_addr;
+			pnk_memcpy(copy_dst, buffer, buffer_len);
+		}
+		return buffer_len;
+	}
 }
 
 fun serial_enqueue_avail(1 rx_tx) {

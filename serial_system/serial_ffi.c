@@ -286,47 +286,15 @@ void ffienqueue_used(unsigned char *c, long clen, unsigned char *a, long alen) {
     a[0] = enqueue_used(ring, buffer, 1, &cookie);
 }
 
-void ffiserial_driver_dequeue_used(unsigned char *c, long clen, unsigned char *a, long alen) {
-    if (clen != 1) {
-        microkit_dbg_puts("There are no arguments supplied when args are expected\n");
-        return;
-    }
-
-    if (alen != BUFFER_SIZE) {
-        // We always need the a array to be 1024 bytes long, the same length as the buffers
-        // in the ring buffers.
-        microkit_dbg_puts("Argument alen not of correct size\n");
-        return;
-    }
-    bool rx_tx = c[0];
-
+void ffidriver_dequeue(unsigned char *c, long clen, unsigned char *a, long alen) {
+    // c has the address of the ring
+    ring_handle_t *ring = *(ring_handle_t **) c;
     void *cookie = 0;
-    // Address that we will pass to dequeue to store the buffer address
     uintptr_t buffer = 0;
-    // Integer to store the length of the buffer
     unsigned int buffer_len = 0;
-    int ret = 0;
-    if (rx_tx == 0) {
-        ret = driver_dequeue(rx_ring.used_ring, &buffer, &buffer_len, &cookie);
-    } else {
-        ret = driver_dequeue(tx_ring.used_ring, &buffer, &buffer_len, &cookie);
-    }
-
-    if (ret != 0) {
-        c[0] = 0;
-        return;
-    } else {
-        if (buffer_len >= BUFFER_SIZE) {
-            microkit_dbg_puts("Buffer len too large\n");
-            return;
-        }
-        int mem_ret = memcpy(a, (char *) buffer, buffer_len);
-
-        c[0] = 1;
-
-        // Copy over the length of the buffer that is to be printed
-        *(unsigned int *) &c[0] = buffer_len;
-    }
+    c[0] = driver_dequeue(ring->used_ring, &buffer, &buffer_len, &cookie);
+    ((uint32_t *)c)[1] = buffer_len;
+    *(uintptr_t *) &a[0] = buffer;
 }
 
 void ffienqueue_avail(unsigned char *c, long clen, unsigned char *a, long alen) {
