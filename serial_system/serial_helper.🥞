@@ -133,3 +133,18 @@ fun serial_enqueue_used(1 rx_tx, 1 input, 1 buffer_addr) {
 	ret = ld8 ring_c;
 	return ret;
 }
+
+fun serial_enqueue_avail(1 rx_tx) {
+	var ring_c = @base;
+	if (rx_tx == 0) {
+		@get_rx_ring(ring_c,1,0,0);
+	} else {
+		@get_tx_ring(ring_c,1,0,0);
+	}
+
+	@enqueue_avail(ring_c,0,0,0);
+	// ring_c now contains the enqueue result
+	var ret = 0;
+	ret = ld8 ring_c;
+	return ret;
+}

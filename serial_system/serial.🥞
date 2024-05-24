@@ -82,17 +82,13 @@ fun handle_tx() {
       phys = phys + 1;
     }
 
-    st8 c_arr, 1;
-    c_len = 1;
-
-    @serial_enqueue_avail(c_arr, c_len, a_arr, a_len);
-
     var ret2 = 0;
-    ret2 = ld8 a_arr;
+    ret2 = serial_enqueue_avail(1);
     if ret2 != 0 {
       return -1;
+    } else {
+      return 0;
     }
-    return 0;
   }
 }
 

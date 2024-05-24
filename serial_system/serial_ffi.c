@@ -335,27 +335,13 @@ void ffiserial_driver_dequeue_used(unsigned char *c, long clen, unsigned char *a
     }
 }
 
-void ffiserial_enqueue_avail(unsigned char *c, long clen, unsigned char *a, long alen) {
-    if (clen != 1) {
-        microkit_dbg_puts("There are no arguments supplied when args are expected");
-        return;
-    }
-
-    bool rx_tx = c[0];
-
+void ffienqueue_avail(unsigned char *c, long clen, unsigned char *a, long alen) {
+    // c has the address of the ring
+    ring_handle_t *ring = *(ring_handle_t **) c;
     void *cookie = 0;
     uintptr_t buffer = 0;
     unsigned int buffer_len = 0;
-
-    if (rx_tx == 0) {
-        a[0] = enqueue_avail(&rx_ring, &buffer, &buffer_len, cookie);
-    } else {
-        a[0] = enqueue_avail(&tx_ring, &buffer, &buffer_len, cookie);
-    }
-
-    if (a[0] != 0) {
-        microkit_dbg_puts("Error in serial enqueue used\n");
-    }
+    c[0] = enqueue_avail(ring, &buffer, &buffer_len, cookie);
 }
 
 void ffidequeue_enqueue_avail(unsigned char *c, long clen, unsigned char *a, long alen) {
