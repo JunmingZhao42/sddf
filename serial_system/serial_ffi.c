@@ -216,12 +216,6 @@ int serial_configure(
     return 0;
 }
 
-// Putchar that is using the hardware FIFO buffers --> Switch to DMA later
-void ffiputchar_regs(unsigned char *c, long clen, unsigned char *a, long alen) {
-    imx_uart_regs_t *regs = (imx_uart_regs_t *) uart_base;
-    regs->txd = c[0];
-}
-
 void init_post(unsigned char *c, long clen, unsigned char *a, long alen) {
     // Setup the ring buffer mechanisms here as well as init the global serial driver data
 

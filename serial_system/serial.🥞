@@ -54,23 +54,20 @@ fun handle_tx() {
 
       var rawtx_ret = 1;
       while rawtx_ret != 0 {
-        var c_arr_uart = @base + 1056;
         var tx_fifo_ret = 0;
         tx_fifo_ret = internal_is_tx_fifo_busy();
         if tx_fifo_ret == 1 {
           continue;
         } else {
           if temp == 10 {
-            st8 c_arr_uart, 13;
-            @putchar_regs(c_arr_uart,0,0,0);
+            putchar_regs(13);
           }
           var putchar_break = 0;
           while putchar_break == 0 {
             tx_fifo_ret = internal_is_tx_fifo_busy();
               if tx_fifo_ret != 1 {
-              st8 c_arr_uart, temp;
-              @putchar_regs(c_arr_uart,0,0,0);
-              putchar_break = 1;
+                putchar_regs(temp);
+                putchar_break = 1;
             }
           }
 

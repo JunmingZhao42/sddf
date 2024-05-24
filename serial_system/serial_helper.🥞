@@ -51,15 +51,14 @@ fun internal_is_tx_fifo_busy() {
 	}
 }
 
-fun ffiputchar_regs(1 c) {
-    /*
+// Putchar that is using the hardware FIFO buffers --> Switch to DMA later
+fun putchar_regs(1 c) {
     var uart_base = @base;
     @get_uart_base(uart_base, 1, 0, 0);
     var regs = 0;
     regs = lds {1} uart_base;
+
     !st8 c, regs + 64; // regs->txd
-    */
-    @putchar_regs(c, 0, 0, 0);
     return 0;
 }
 
