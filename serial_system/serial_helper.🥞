@@ -22,7 +22,7 @@ fun getchar() {
     if (sr2 & 1) {
 		// TODO: ldw triggers segfault here
 		var reg_b = @base;
-		@ld_hw(regs, 1, reg_b, 1);
+		@transfer_hw(regs, 1, reg_b, 1);
 		reg = lds {1} reg_b;
 		// reg & UART_URXD_READY_MASK BIT(15) 0x8000
 		if ((reg & 32768) != 0) {

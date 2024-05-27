@@ -74,11 +74,12 @@ void ffiprint_int(unsigned char *c, long clen, unsigned char *a, long alen) {
 }
 
 /*
-    * helper function to load half word, TODO: should be replaced later by pancake
+    * helper function to copy half word from *c to *a
+    * TODO: should be replaced later by pancake
     * c: memory address
-    * a: pointer to the result
+    * a: memory address
 */
-void ffild_hw(unsigned char *c, long clen, unsigned char *a, long alen) {
+void ffitransfer_hw(unsigned char *c, long clen, unsigned char *a, long alen) {
     if (clen != 1 || alen != 1) {
         microkit_dbg_puts("ld_hw: There are no arguments supplied when args are expected");
         c[0] = 0;
@@ -86,4 +87,15 @@ void ffild_hw(unsigned char *c, long clen, unsigned char *a, long alen) {
     }
     uint32_t value = *(uint32_t *)c;
     *(uint32_t *) a = value;
+}
+
+void ffifuncall(unsigned char *c, long clen, unsigned char *a, long alen) {
+    if (clen != 1) {
+        microkit_dbg_puts("ld_hw: There are no arguments supplied when args are expected");
+        c[0] = 0;
+        return;
+    }
+    // c is the address of the function to call
+    void (*func)(void) = (void (*)(void))c;
+    func();
 }
