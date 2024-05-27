@@ -53,8 +53,11 @@ void print_int(int num) {
 }
 
 void ffiprintf(unsigned char *c, long clen, unsigned char *a, long alen) {
-    print_address(alen);
-    microkit_dbg_puts("\n");
+    microkit_dbg_puts("my printf: ");
+    microkit_dbg_putc(((char) clen) + 48);
+    microkit_dbg_putc(',');
+    microkit_dbg_putc(((char) alen) + 48);
+    microkit_dbg_putc('\n');
 }
 
 void ffiprint_int(unsigned char *c, long clen, unsigned char *a, long alen) {

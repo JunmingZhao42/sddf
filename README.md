@@ -18,35 +18,55 @@ make cake
 We will need to modify an output file, and recompile. This is because of the auto-genrated assembly code outputted by the cake compiler wishing to call
 to a `cml_exit` function rather than return from where it was called, which is the behaviour we want.
 
-In `serial.S`, please replace `cdecl (cml_main)` with:
+<!-- TODO: Remove this: -->
 
+In `serial.S`, please add line
 ```
-cdecl ( cml_main ) :
-    _ldrel x0 , cake_main /* arg1 : entry
-    address */
-    _ldrel x1 , cdecl ( cml_heap ) /* arg2 : first
-    address of heap */
-    ldr x1 ,[ x1 ]
-    _ldrel x2 , cake_bitmaps
-    str x2 ,[ x1 ] /* store bitmap
-    pointer */
-    _ldrel x2 , cdecl ( cml_stack ) /* arg3 : first
-    address of stack */
-    ldr x2 ,[ x2 ]
-    _ldrel x3 , cdecl ( cml_stackend ) /* arg4 : first
-    address past the stack */
-    ldr x3 ,[ x3 ]
-    str x30 , [ sp , # -32]!
-    b cake_main
+cdecl(ret_third): .quad 0
+```
+right after line
+```
+cdecl(ret_base): .quad 0
 ```
 
-And please replace `cake_exit` with:
+Replace `cake_enter` with:
+```
+cake_enter:
+     str    x30, [sp, #-32]!
+     str    x28, [sp, #-32]!
+     str    x27, [sp, #-32]!
+     str    x25, [sp, #-32]!
+     _ldrel x9, cdecl(ret_stack)
+     ldr    x25, [x9]
+     cbz    x25, cake_err3
+     str    xzr, [x9]
+     _ldrel x9, cdecl(ret_base)
+     ldr    x28, [x9]
+     cbz    x28, cake_err3
+     str    xzr, [x9]
+     _ldrel x9, cdecl(ret_third)
+     ldr    x27, [x9]
+     _ldrel x30, cake_ret
+     br     x10
+     .p2align 4
+```
+
+Replace `cake_return` with:
 
 ```
-cake_exit :
-    ldr x30 , [ sp ] , #32
-    ret
-    .p2align 4
+cake_return:
+     _ldrel x9, cdecl(ret_stack)
+     str    x25, [x9]
+     _ldrel x9, cdecl(ret_base)
+     str    x28, [x9]
+     _ldrel x9, cdecl(ret_third)
+     str    x27, [x9]
+     ldr    x25, [sp], #32
+     ldr    x27, [sp], #32
+     ldr    x28, [sp], #32
+     ldr    x30, [sp], #32
+     ret
+     .p2align 4
 ```
 ## Supported Boards
 

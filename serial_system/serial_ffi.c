@@ -33,6 +33,8 @@
 /* clFFI (command line) */
 
 #define IRQ_CH 1
+#define TX_CH 8
+#define RX_CH 10
 
 /* Shared Memory regions. These all have to be here to keep compiler happy */
 // Ring handle components
@@ -44,8 +46,6 @@ uintptr_t shared_dma_vaddr;
 // Base of the uart registers
 uintptr_t uart_base;
 
-char current_channel;
-
 /* Pointers to shared_ringbuffers */
 ring_handle_t rx_ring;
 ring_handle_t tx_ring;
@@ -56,6 +56,9 @@ static char cml_memory[1024*1024*2];
 
 /* exported in cake.S */
 extern void cml_main(void);
+extern void handle_rx(void);
+extern void handle_tx(void);
+extern void handle_irq(void);
 extern void *cml_heap;
 extern void *cml_stack;
 extern void *cml_stackend;
@@ -102,6 +105,14 @@ void ffikernel_ffi (unsigned char *c, long clen, unsigned char *a, long alen) { 
 
 void cml_exit(int arg) {
     microkit_dbg_puts("ERROR! We should not be getting here\n");
+}
+
+void cml_err(int arg) {
+    if (arg == 3) {
+        microkit_dbg_puts("Memory not ready for entry. You may have not run the init code yet, or be trying to enter during an FFI call.\n");
+    }
+
+  cml_exit(arg);
 }
 
 /* Need to come up with a replacement for this clear cache function. Might be worth testing just flushing the entire l1 cache, but might cause issues with returning to this file*/
@@ -163,16 +174,6 @@ static void imx_uart_set_baud(long bps)
     regs->bir = bir;
     regs->bmr = bmr;
     regs->fcr = fcr;
-}
-
-/* FFI call to get the current channel that has notified us. Need to find a better
-way to pass an argument to cml_main() */
-void ffiget_channel(unsigned char *c, long clen, unsigned char *a, long alen) {
-    if (alen != 1) {
-        return;
-    }
-
-    a[0] = current_channel;
 }
 
 int serial_configure(
@@ -348,17 +349,19 @@ void init(void) {
 
     init_post(c, clen, a, alen);
     init_pancake_mem();
+    cml_main();
 }
 
-// Entry point that is invoked on a serial interrupt, or notifications from the server using the TX and RX channels
+// Entry points that are invoked on a serial interrupt, or notifications from the server using the TX and RX channels
 void notified(microkit_channel ch) {
-    // Here, we want to call to cakeml main - this will be our entry point into the pancake program.
-    if (ch == 8 || ch == IRQ_CH || ch == 10) {
-        current_channel = (char) ch;
-        cml_main();
+    if (ch == TX_CH) {
+        handle_tx();
     }
-
+    if (ch == RX_CH) {
+        handle_rx();
+    }
     if (ch == IRQ_CH) {
+        handle_irq();
         microkit_irq_ack(IRQ_CH);
     }
 }

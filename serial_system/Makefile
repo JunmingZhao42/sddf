@@ -59,7 +59,7 @@ $(BUILD_DIR)/serial.o: $(BUILD_DIR)/serial.S Makefile
 PANCAKE_FILES = serial.🥞 serial_helper.🥞 util.🥞
 
 $(BUILD_DIR)/serial.S: $(PANCAKE_FILES) Makefile
-	cat $(PANCAKE_FILES) | $(CAKE_COMPILER) --target=arm8 --pancake > $@
+	cat $(PANCAKE_FILES) | $(CAKE_COMPILER) --target=arm8 --pancake --main_return=true > $@
 
 $(BUILD_DIR)/%.o: %.c Makefile
 	$(CC) -c $(CFLAGS) $< -o $@
