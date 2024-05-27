@@ -69,3 +69,18 @@ void ffiprint_int(unsigned char *c, long clen, unsigned char *a, long alen) {
     microkit_dbg_puts(arg);
     microkit_dbg_puts(")\n");
 }
+
+/*
+    * helper function to load half word, TODO: should be replaced later by pancake
+    * c: memory address
+    * a: pointer to the result
+*/
+void ffild_hw(unsigned char *c, long clen, unsigned char *a, long alen) {
+    if (clen != 1 || alen != 1) {
+        microkit_dbg_puts("ld_hw: There are no arguments supplied when args are expected");
+        c[0] = 0;
+        return;
+    }
+    uint32_t value = *(uint32_t *)c;
+    *(uint32_t *) a = value;
+}

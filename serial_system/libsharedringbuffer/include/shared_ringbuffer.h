@@ -233,3 +233,5 @@ static int driver_dequeue(ring_buffer_t *ring, uintptr_t *addr, unsigned int *le
 
     return 0;
 }
+
+void ffiTHREAD_MEMORY_RELEASE(unsigned char *c, long clen, unsigned char *a, long alen);

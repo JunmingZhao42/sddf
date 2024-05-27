@@ -18,3 +18,7 @@ void ring_init(ring_handle_t *ring, ring_buffer_t *avail, ring_buffer_t *used, n
         ring->avail_ring->read_idx = 0;
     }
 }
+
+void ffiTHREAD_MEMORY_RELEASE(unsigned char *c, long clen, unsigned char *a, long alen) {
+    THREAD_MEMORY_RELEASE();
+}

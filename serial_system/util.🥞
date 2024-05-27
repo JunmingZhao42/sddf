@@ -9,3 +9,25 @@ fun pnk_memcpy(1 dst, 1 src, 1 len) {
     }
 	return 0;
 }
+
+/* Returns a % b */
+fun pnk_modulo(1 a, 1 b) {
+    if (b == 0) {
+        // make sure b != 0
+        return -1;
+    } else {
+        var c = a;
+        while (c >= b) {
+            c = c - b;
+        }
+        return c;
+    }
+}
+
+/* Temporary helper to efficiently mod 512,
+   Returns a % 512 */
+fun pnk_modulo512(1 a) {
+    var b = 0;
+    b = a & 511;
+    return b;
+}

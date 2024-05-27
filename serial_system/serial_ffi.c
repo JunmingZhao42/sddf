@@ -259,21 +259,6 @@ void init_post(unsigned char *c, long clen, unsigned char *a, long alen) {
     regs->cr1 |= UART_CR1_RRDYEN;                /* Enable recv interrupt.            */
 }
 
-/*
-    * helper function to load half word, TODO: should be replaced later by pancake
-    * c: memory address
-    * a: pointer to the result
-*/
-void ffild_hw(unsigned char *c, long clen, unsigned char *a, long alen) {
-    if (clen != 1 || alen != 1) {
-        microkit_dbg_puts("ld_hw: There are no arguments supplied when args are expected");
-        c[0] = 0;
-        return;
-    }
-    uint32_t value = *(uint32_t *)c;
-    *(uint32_t *) a = value;
-}
-
 void ffidequeue_avail(unsigned char *c, long clen, unsigned char *a, long alen) {
     if (clen != 1 || alen != 1) {
         microkit_dbg_puts("dequeue_avail: There are no arguments supplied when args are expected");
@@ -367,7 +352,6 @@ void init(void) {
 
 // Entry point that is invoked on a serial interrupt, or notifications from the server using the TX and RX channels
 void notified(microkit_channel ch) {
-
     // Here, we want to call to cakeml main - this will be our entry point into the pancake program.
     if (ch == 8 || ch == IRQ_CH || ch == 10) {
         current_channel = (char) ch;
