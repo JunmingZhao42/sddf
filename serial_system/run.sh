@@ -1,1 +1,0 @@
-mq run -c "test188888" -l mqlog -s imx8mm -f build/loader.img

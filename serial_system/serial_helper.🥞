@@ -1,9 +1,14 @@
-/* Return the address of the UART registers */
-fun get_uart_base() {
+/* Store uart_base address value in @base */
+fun update_uart_base() {
 	var uart_base = @base;
     @get_uart_base(0, 0, uart_base, 1);
-    var regs = 0;
-    regs = lds {1} uart_base;
+	return 0;
+}
+
+/* Return the address of the UART registers */
+fun get_uart_base() {
+	var regs = 0;
+	regs = lds {1} @base;
 	return regs;
 }
 
@@ -21,7 +26,7 @@ fun getchar() {
     // sr2 & UART_SR2_RXFIFO_RDR BIT(1)
     if (sr2 & 1) {
 		// TODO: ldw triggers segfault here
-		var reg_b = @base;
+		var reg_b = @base + 512;
 		@transfer_hw(regs, 1, reg_b, 1);
 		reg = lds {1} reg_b;
 		// reg & UART_URXD_READY_MASK BIT(15) 0x8000
@@ -66,7 +71,7 @@ fun putchar_regs(1 c) {
 }
 
 fun increment_num_chars() {
-	var num_base = @base;
+	var num_base = @base + 512;
 	@num_to_get_chars_addr(0, 0, num_base, 1);
 	var num_addr = 0;
 	num_addr = lds {1} num_base;
@@ -80,7 +85,7 @@ fun increment_num_chars() {
 }
 
 fun decrement_num_chars() {
-	var num_base = @base;
+	var num_base = @base + 512;
 	@num_to_get_chars_addr(0, 0, num_base, 1);
 	var num_addr = 0;
 	num_addr = lds {1} num_base;
@@ -99,7 +104,7 @@ fun serial_dequeue_avail(1 rx_tx, 1 buffer_addr) {
        have that are outstanding. If none are outstanding then return -1 in a array,
        otherwise continue with the dequeue.
 	*/
-	var num_base = @base;
+	var num_base = @base + 512;
 	@num_to_get_chars_addr(0, 0, num_base, 1);
 	var num_addr = 0;
 	num_addr = lds {1} num_base;
@@ -111,7 +116,7 @@ fun serial_dequeue_avail(1 rx_tx, 1 buffer_addr) {
 	}
 
 	// got some chars to get
-	var ring_base = @base + 4;
+	var ring_base = @base + 516;
 	if (rx_tx == 0) {
 		@get_rx_ring(0, 0, ring_base, 1);
 	} else {
@@ -134,7 +139,7 @@ fun serial_enqueue_used(1 rx_tx, 1 input, 1 buffer_addr) {
 	buffer = lds {1} buffer_addr;
 	!st8 input, buffer;
 
-	var ring_base = @base;
+	var ring_base = @base + 512;
 	if (rx_tx == 0) {
 		@get_rx_ring(0, 0, ring_base, 1);
 	} else {
@@ -149,14 +154,14 @@ fun serial_enqueue_used(1 rx_tx, 1 input, 1 buffer_addr) {
 }
 
 fun serial_driver_dequeue_used(1 rx_tx, 1 copy_dst) {
-	var ring_base = @base;
+	var ring_base = @base + 512;
 	if (rx_tx == 0) {
 		@get_rx_ring(0, 0, ring_base, 1);
 	} else {
 		@get_tx_ring(0, 0, ring_base, 1);
 	}
 
-	var buffer_addr = @base + 16;
+	var buffer_addr = @base + 528;
 	@driver_dequeue(ring_base, 1, buffer_addr, 1);
 	// ring_base now contains the dequeue result
 	var ret = 0;
@@ -180,7 +185,7 @@ fun serial_driver_dequeue_used(1 rx_tx, 1 copy_dst) {
 }
 
 fun serial_enqueue_avail(1 rx_tx) {
-	var ring_base = @base;
+	var ring_base = @base + 512;
 	if (rx_tx == 0) {
 		@get_rx_ring(0, 0, ring_base, 1);
 	} else {

@@ -1,10 +1,21 @@
 fun main() {
 	// do nothing
+	// memset @base to @base + 512 to 0 for global variables
+	var start = @base;
+	var end = @base + 512;
+	while (start < end) {
+		stw start, 0;
+		start = start + 4;
+	}
+
+	// set up uart_base
+	update_uart_base();
+
 	return 0;
 }
 
 export fun handle_tx() {
-	var buffer_addr = @base + 32;
+	var buffer_addr = @base + 544;
 	while true {
 		var ret = 0;
 		// 1: dequeue_used tx
@@ -74,7 +85,7 @@ export fun handle_irq() {
 		return -1;
 	} else {
 		while true {
-			var buffer_addr = @base + 32;
+			var buffer_addr = @base + 544;
 			var dequeue_ret = 0;
 			// 0: dequeue_avail rx
 			dequeue_ret = serial_dequeue_avail(0, buffer_addr);
