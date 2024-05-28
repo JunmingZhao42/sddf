@@ -6,6 +6,6 @@ build/
 .vscode
 cake-x64-64/
 cake-x64-64-new/
-*/build.sh
+*/my_build.sh
 */run.sh
 mqlog

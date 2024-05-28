@@ -5,12 +5,12 @@ fun main() {
 	var end = @base + 512;
 	while (start < end) {
 		stw start, 0;
-		start = start + 4;
+		start = start + 8;
 	}
 
 	// set up uart_base
-	update_uart_base();
-
+	reset_uart_base();
+	reset_num_chars();
 	return 0;
 }
 

@@ -1,5 +1,5 @@
 /* Store uart_base address value in @base */
-fun update_uart_base() {
+fun reset_uart_base() {
 	var uart_base = @base;
     @get_uart_base(0, 0, uart_base, 1);
 	return 0;
@@ -11,6 +11,37 @@ fun get_uart_base() {
 	regs = lds {1} @base;
 	return regs;
 }
+
+fun reset_num_chars() {
+	var num_addr = @base + 8;
+	var num = 0;
+	stw num_addr, num;
+	return 0;
+}
+
+fun get_num_chars() {
+	var num_addr = @base + 8;
+	var num = 0;
+	num = lds {1} num_addr;
+	return num;
+}
+
+fun increment_num_chars() {
+	var num_addr = @base + 8;
+	var num = 0;
+	num = lds {1} num_addr;
+	stw num_addr, num + 1;
+	return 0;
+}
+
+fun decrement_num_chars() {
+	var num_addr = @base + 8;
+	var num = 0;
+	num = lds {1} num_addr;
+	stw num_addr, num - 1;
+	return 0;
+}
+
 
 /* Return the character in uart_base->rxd (receiver register) */
 fun getchar() {
@@ -70,48 +101,15 @@ fun putchar_regs(1 c) {
     return 0;
 }
 
-fun increment_num_chars() {
-	var num_base = @base + 512;
-	@num_to_get_chars_addr(0, 0, num_base, 1);
-	var num_addr = 0;
-	num_addr = lds {1} num_base;
-
-	var num_to_get_chars = 0;
-	!ldw num_to_get_chars, num_addr;
-
-	num_to_get_chars = num_to_get_chars + 1;
-	!stw num_to_get_chars, num_addr;
-	return 0;
-}
-
-fun decrement_num_chars() {
-	var num_base = @base + 512;
-	@num_to_get_chars_addr(0, 0, num_base, 1);
-	var num_addr = 0;
-	num_addr = lds {1} num_base;
-
-	var num_to_get_chars = 0;
-	!ldw num_to_get_chars, num_addr;
-
-	num_to_get_chars = num_to_get_chars - 1;
-	!stw num_to_get_chars, num_addr;
-	return 0;
-}
-
 fun serial_dequeue_avail(1 rx_tx, 1 buffer_addr) {
 	/* From our serial driver, this function is only ever called in the handle irq function
        to attempt to service all get char requests. Check here how many get char requests we
        have that are outstanding. If none are outstanding then return -1 in a array,
        otherwise continue with the dequeue.
 	*/
-	var num_base = @base + 512;
-	@num_to_get_chars_addr(0, 0, num_base, 1);
-	var num_addr = 0;
-	num_addr = lds {1} num_base;
-	var num_to_get_chars = 0;
-	!ldw num_to_get_chars, num_addr;
-
-	if (num_to_get_chars <= 0) {
+	var num_chars = 0;
+	num_chars = get_num_chars();
+	if (num_chars <= 0) {
 		return 1;
 	}
 

@@ -50,8 +50,6 @@ uintptr_t uart_base;
 ring_handle_t rx_ring;
 ring_handle_t tx_ring;
 
-struct serial_driver global_serial_driver_data = {0};
-
 static char cml_memory[1024*1024*2];
 
 /* exported in cake.S */
@@ -147,15 +145,6 @@ void ffiget_tx_ring(unsigned char *c, long clen, unsigned char *a, long alen) {
     *(void**) a = (void *) &tx_ring;
 }
 
-void ffinum_to_get_chars_addr(unsigned char *c, long clen, unsigned char *a, long alen) {
-    if (clen != 0 || alen != 1) {
-        microkit_dbg_puts("num_to_get_chars_addr: There are no arguments supplied when args are expected");
-        a[0] = 0;
-        return;
-    }
-    *(void**) a = (void*) &(global_serial_driver_data.num_to_get_chars);
-}
-
 /*
  * BaudRate = RefFreq / (16 * (BMR + 1)/(BIR + 1) )
  * BMR and BIR are 16 bit
@@ -234,12 +223,6 @@ void init_post(unsigned char *c, long clen, unsigned char *a, long alen) {
     // Init the shared ring buffers
     ring_init(&rx_ring, (ring_buffer_t *)rx_avail, (ring_buffer_t *)rx_used, NULL, 0);
     ring_init(&tx_ring, (ring_buffer_t *)tx_avail, (ring_buffer_t *)tx_used, NULL, 0);
-
-    // Setup the global serial driver data
-    global_serial_driver_data.regs = (imx_uart_regs_t *) uart_base;
-    global_serial_driver_data.rx_ring = rx_ring;
-    global_serial_driver_data.tx_ring = tx_ring;
-    global_serial_driver_data.num_to_get_chars = 0;
 
     /* Line configuration */
     int ret = serial_configure(115200, 8, PARITY_NONE, 1);
