@@ -130,17 +130,13 @@ static inline int enqueue(ring_buffer_t *ring, uintptr_t buffer, unsigned int le
 static inline int dequeue(ring_buffer_t *ring, uintptr_t *addr, unsigned int *len, void **cookie)
 {
     if (ring_empty(ring)) {
-        microkit_dbg_puts("Ring is empty");
+        // microkit_dbg_puts("Ring is empty");
         return -1;
     }
 
-    microkit_dbg_puts("Dequeueing 1");
     *addr = ring->buffers[ring->read_idx % SIZE].encoded_addr;
-    microkit_dbg_puts("Dequeueing 2");
     *len = ring->buffers[ring->read_idx % SIZE].len;
-    microkit_dbg_puts("Dequeueing 3");
     *cookie = ring->buffers[ring->read_idx % SIZE].cookie;
-    microkit_dbg_puts("Dequeueing 4");
 
     THREAD_MEMORY_RELEASE();
     ring->read_idx++;
