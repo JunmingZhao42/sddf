@@ -83,13 +83,8 @@ fun get_rx_ring() {
 }
 
 fun get_tx_ring() {
-	var ring_base = @base + 256;
+	var ring_base = @base + 8*10;
 	return ring_base;
-}
-
-fun ring_init(1 ring_addr, 1 avail, 1 used) {
-	@ring_init(ring_addr, avail, used, 0);
-	return 0;
 }
 
 /* Return the character in uart_base->rxd (receiver register) */

@@ -221,10 +221,6 @@ int serial_configure(
     return 0;
 }
 
-void ffiring_init(unsigned char *c, long clen, unsigned char *a, long alen) {
-    ring_init((ring_handle_t *) c, (ring_buffer_t *) clen, (ring_buffer_t *) a, NULL, 0);
-}
-
 void init_post(unsigned char *c, long clen, unsigned char *a, long alen) {
     // Setup the ring buffer mechanisms here as well as init the global serial driver data
 

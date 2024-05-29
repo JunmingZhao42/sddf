@@ -1,5 +1,14 @@
+fun ring_init(1 ring_addr, 1 avail, 1 used) {
+    stw ring_addr, used;
+    stw ring_addr + 8, avail;
+    stw ring_addr + 16, 0;
+    // TODO: init avail and used to be empty?
+	return 0;
+}
+
 // #define SIZE 512
 
+/*
 fun ring_write_idx(1 ring_addr) {
     var write_idx_addr = @base;
     @ld_hw(ring_addr, 1, write_idx_addr, 1);
@@ -27,7 +36,7 @@ fun incr_ring_write_idx(1 ring_addr) {
     return 0;
 }
 
-/* Returns `&ring->buffers[idx % SIZE]`, assuming SIZE=512 */
+// Returns `&ring->buffers[idx % SIZE]`, assuming SIZE=512
 fun ring_buffer_get(1 ring_addr, 1 idx) {
     var idx = 0;
     idx = pnk_modulo512(write_idx);
@@ -113,3 +122,5 @@ fun driver_enqueue() {
 fun enqueue_avail() {
     return -1;
 }
+
+*/
