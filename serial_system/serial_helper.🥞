@@ -150,14 +150,16 @@ fun serial_dequeue_avail(1 rx_tx, 1 buffer_addr) {
 		ring = get_tx_ring();
 	}
 
-	@dequeue_avail(ring, 1, buffer_addr, 1);
-	// ring now contains the dequeue result
-	var success = (lds {1} buffer_addr + 8);
-	if (success == 0) {
+	// here we discarded the returned len and cookie
+	var len_ptr = @base + 512;
+	var cookie_ptr = @base + 520;
+	var ret = 0;
+	ret = dequeue_avail(ring, buffer_addr, len_ptr, cookie_ptr);
+	if (ret == 0) {
 		decrement_num_chars();
 	}
-	// succuss != 0 means the buffer was empty
-	return success;
+	// ret != 0 means the buffer was empty
+	return ret;
 }
 
 fun serial_enqueue_used(1 rx_tx, 1 input, 1 buffer_addr) {

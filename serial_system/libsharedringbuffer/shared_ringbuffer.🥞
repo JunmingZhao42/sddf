@@ -57,12 +57,44 @@ fun enqueue(1 ring, 1 buffer, 1 len, 1 cookie) {
     var buffer_ptr = 0;
     buffer_ptr = ring_buffer_buffers(ring, write_idx);
 
-    !stw buffer, buffer_ptr;
-    !st8 len, buffer_ptr + 8;
-    !stw cookie, buffer_ptr + 16;
+    buff_desc_encoded_addr_set(buffer_ptr, buffer);
+    buff_desc_len_set(buffer_ptr, len);
+    buff_desc_cookie_set(buffer_ptr, cookie);
 
     ring_buffer_write_idx_set(ring, (write_idx + 1));
     @THREAD_MEMORY_RELEASE(0,42,0,42);
+    return 0;
+}
+
+fun dequeue(1 ring, 1 addr, 1 len_ptr, 1 cookie_ptr) {
+    var empty = 0;
+    empty = ring_empty(ring);
+    if (empty) {
+        return -1;
+    }
+
+    var read_idx = 0;
+    read_idx = ring_buffer_read_idx(ring);
+    var buffer = 0;
+    buffer = ring_buffer_buffers(ring, read_idx);
+
+    // *addr = ring->buffers[ring->read_idx % SIZE].encoded_addr;
+    var encoded_addr = 0;
+    encoded_addr = buff_desc_encoded_addr(buffer);
+    !stw encoded_addr, addr;
+
+    // *len = ring->buffers[ring->read_idx % SIZE].len;
+    var len = 0;
+    len = buff_desc_len(buffer);
+    !stw len, len_ptr;
+
+    // *cookie = ring->buffers[ring->read_idx % SIZE].cookie;
+    var cookie = 0;
+    cookie = buff_desc_cookie(buffer);
+    !stw cookie, cookie_ptr;
+
+    @THREAD_MEMORY_RELEASE(0,42,0,42);
+    ring_buffer_read_idx_set(ring, (read_idx + 1));
     return 0;
 }
 
@@ -80,12 +112,14 @@ fun enqueue_avail(1 ring, 1 addr, 1 len, 1 cookie) {
     return ret;
 }
 
-/*
-fun driver_dequeue() {
-    return -1;
+fun dequeue_avail(1 ring, 1 addr, 1 len_ptr, 1 cookie_ptr) {
+    var avail_ring = (lds {1} ring + 8);
+    var ret = 0;
+    ret = dequeue(avail_ring, addr, len_ptr, cookie_ptr);
+    return ret;
 }
 
-fun driver_enqueue() {
+fun driver_dequeue(1 ring, 1 addr, 1 len_ptr, 1 cookie_ptr) {
+    var used_ring = (lds {1} ring);
     return -1;
 }
-*/
