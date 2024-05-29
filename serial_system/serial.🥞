@@ -1,16 +1,33 @@
 fun main() {
-	// do nothing
-	// memset @base to @base + 512 to 0 for global variables
-	var start = @base;
+	// memset @base[7] to @base[64] to 0 for global variables
+	var start = @base + 8*7;
 	var end = @base + 512;
 	while (start < end) {
 		stw start, 0;
 		start = start + 8;
 	}
 
-	// set up uart_base
+	// TODO: not sure why value under @base is touched
 	reset_uart_base();
-	reset_num_chars();
+
+	// init the shared ring buffers
+	var rx_ring = 0;
+	var tx_ring = 0;
+	rx_ring = get_rx_ring();
+	tx_ring = get_tx_ring();
+
+	var rx_avail = 0;
+	var tx_avail = 0;
+	rx_avail = get_rx_avail();
+	tx_avail = get_tx_avail();
+
+	var rx_used = 0;
+	var tx_used = 0;
+	rx_used = get_rx_used();
+	tx_used = get_tx_used();
+
+	ring_init(rx_ring, rx_avail, rx_used);
+	ring_init(tx_ring, tx_avail, tx_used);
 	return 0;
 }
 

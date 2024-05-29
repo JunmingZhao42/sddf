@@ -36,6 +36,9 @@
 #define TX_CH 8
 #define RX_CH 10
 
+// Base of the uart registers
+uintptr_t uart_base;
+
 /* Shared Memory regions. These all have to be here to keep compiler happy */
 // Ring handle components
 uintptr_t rx_avail;
@@ -43,8 +46,6 @@ uintptr_t rx_used;
 uintptr_t tx_avail;
 uintptr_t tx_used;
 uintptr_t shared_dma_vaddr;
-// Base of the uart registers
-uintptr_t uart_base;
 
 /* Pointers to shared_ringbuffers */
 ring_handle_t rx_ring;
@@ -64,6 +65,38 @@ extern void *cml_stackend;
 extern char cake_text_begin;
 extern char cake_codebuffer_begin;
 extern char cake_codebuffer_end;
+
+void ffiget_shared_mem_addr(unsigned char *c, long clen, unsigned char *a, long alen) {
+    if (alen != 1 || clen < 1) {
+        microkit_dbg_puts("get_shared_mem_addr: There are no arguments supplied when args are expected");
+        a[0] = 0;
+        return;
+    }
+    switch (clen) {
+        case 1:
+            *(uintptr_t *) a = rx_avail;
+            break;
+        case 2:
+            *(uintptr_t *) a = rx_used;
+            break;
+        case 3:
+            *(uintptr_t *) a = tx_avail;
+            break;
+        case 4:
+            *(uintptr_t *) a = tx_used;
+            break;
+        case 5:
+            *(uintptr_t *) a = shared_dma_vaddr;
+            break;
+        case 6:
+            *(uintptr_t *) a = uart_base;
+            break;
+        default:
+            microkit_dbg_puts("get_shared_mem_addr: Invalid argument supplied");
+            a[0] = 0;
+            break;
+    }
+}
 
 #ifdef EVAL
 
@@ -116,33 +149,6 @@ void cml_err(int arg) {
 /* Need to come up with a replacement for this clear cache function. Might be worth testing just flushing the entire l1 cache, but might cause issues with returning to this file*/
 void cml_clear() {
     microkit_dbg_puts("Trying to clear cache\n");
-}
-
-void ffiget_uart_base(unsigned char *c, long clen, unsigned char *a, long alen) {
-    if (clen != 0 || alen != 1) {
-        microkit_dbg_puts("get_uart_base: There are no arguments supplied when args are expected");
-        a[0] = 0;
-        return;
-    }
-    *(void**) a = (void *) uart_base;
-}
-
-void ffiget_rx_ring(unsigned char *c, long clen, unsigned char *a, long alen) {
-    if (clen != 0 || alen != 1) {
-        microkit_dbg_puts("get_rx_ring: There are no arguments supplied when args are expected");
-        a[0] = 0;
-        return;
-    }
-    *(void**) a = (void *) &rx_ring;
-}
-
-void ffiget_tx_ring(unsigned char *c, long clen, unsigned char *a, long alen) {
-    if (clen != 0 || alen != 1) {
-        microkit_dbg_puts("get_tx_ring: There are no arguments supplied when args are expected");
-        a[0] = 0;
-        return;
-    }
-    *(void**) a = (void *) &tx_ring;
 }
 
 /*
@@ -215,14 +221,15 @@ int serial_configure(
     return 0;
 }
 
+void ffiring_init(unsigned char *c, long clen, unsigned char *a, long alen) {
+    ring_init((ring_handle_t *) c, (ring_buffer_t *) clen, (ring_buffer_t *) a, NULL, 0);
+}
+
 void init_post(unsigned char *c, long clen, unsigned char *a, long alen) {
     // Setup the ring buffer mechanisms here as well as init the global serial driver data
 
     imx_uart_regs_t *regs = (imx_uart_regs_t *) uart_base;
 
-    // Init the shared ring buffers
-    ring_init(&rx_ring, (ring_buffer_t *)rx_avail, (ring_buffer_t *)rx_used, NULL, 0);
-    ring_init(&tx_ring, (ring_buffer_t *)tx_avail, (ring_buffer_t *)tx_used, NULL, 0);
 
     /* Line configuration */
     int ret = serial_configure(115200, 8, PARITY_NONE, 1);
@@ -250,13 +257,14 @@ void ffidequeue_avail(unsigned char *c, long clen, unsigned char *a, long alen) 
         return;
     }
     // c has the address of the ring
-    ring_handle_t *ring = *(ring_handle_t **) c;
+    ring_handle_t *ring = (ring_handle_t *) c;
     uintptr_t buffer = 0;
     unsigned int buffer_len = 0;
     void *cookie = 0;
 
-    c[0] = dequeue_avail(ring, &buffer, &buffer_len, &cookie);
-    *(uintptr_t *) &a[0] = buffer;
+    int result = dequeue_avail(ring, &buffer, &buffer_len, &cookie);
+    ((uintptr_t *) a)[0] = buffer;
+    ((uintptr_t *) a)[1] = result;
 }
 
 void ffienqueue_used(unsigned char *c, long clen, unsigned char *a, long alen) {
@@ -266,11 +274,12 @@ void ffienqueue_used(unsigned char *c, long clen, unsigned char *a, long alen) {
         return;
     }
     // c has the address of the ring
-    ring_handle_t *ring = *(ring_handle_t **) c;
+    ring_handle_t *ring = (ring_handle_t *) c;
     // a has the address of the buffer
     uintptr_t buffer = *(uintptr_t *) a;
     void *cookie = 0;
-    a[0] = enqueue_used(ring, buffer, 1, &cookie);
+    int result = enqueue_used(ring, buffer, 1, &cookie);
+    ((uintptr_t *) a)[1] = result;
 }
 
 void ffidriver_dequeue(unsigned char *c, long clen, unsigned char *a, long alen) {
@@ -280,13 +289,14 @@ void ffidriver_dequeue(unsigned char *c, long clen, unsigned char *a, long alen)
         return;
     }
     // c has the address of the ring
-    ring_handle_t *ring = *(ring_handle_t **) c;
+    ring_handle_t *ring = (ring_handle_t *) c;
     void *cookie = 0;
     uintptr_t buffer = 0;
     unsigned int buffer_len = 0;
-    c[0] = driver_dequeue(ring->used_ring, &buffer, &buffer_len, &cookie);
-    ((uint32_t *)c)[1] = buffer_len;
-    *(uintptr_t *) &a[0] = buffer;
+    int result = driver_dequeue(ring->used_ring, &buffer, &buffer_len, &cookie);
+    ((uintptr_t *) a)[0] = buffer;
+    ((uintptr_t *) a)[1] = result;
+    ((uintptr_t *) a)[2] = buffer_len;
 }
 
 void ffienqueue_avail(unsigned char *c, long clen, unsigned char *a, long alen) {
@@ -296,11 +306,12 @@ void ffienqueue_avail(unsigned char *c, long clen, unsigned char *a, long alen) 
         return;
     }
     // c has the address of the ring
-    ring_handle_t *ring = *(ring_handle_t **) c;
+    ring_handle_t *ring = (ring_handle_t *) c;
     void *cookie = 0;
     uintptr_t buffer = 0;
     unsigned int buffer_len = 0;
-    c[0] = enqueue_avail(ring, &buffer, &buffer_len, cookie);
+    int result = enqueue_avail(ring, &buffer, &buffer_len, cookie);
+    ((uintptr_t *) a)[0] = result;
 }
 
 void init_pancake_mem() {
@@ -310,6 +321,17 @@ void init_pancake_mem() {
     cml_heap = cml_memory;
     cml_stack = cml_heap + cml_heap_sz;
     cml_stackend = cml_stack + cml_stack_sz;
+}
+
+void init_pancake_data() {
+    uintptr_t *heap = (uintptr_t *) cml_heap;
+    heap[0] = uart_base;
+    heap[1] = rx_avail;
+    heap[2] = rx_used;
+    heap[3] = tx_avail;
+    heap[4] = tx_used;
+    heap[5] = shared_dma_vaddr;
+    heap[6] = 0;
 }
 
 /*
@@ -332,6 +354,7 @@ void init(void) {
 
     init_post(c, clen, a, alen);
     init_pancake_mem();
+    init_pancake_data();
     cml_main();
 }
 

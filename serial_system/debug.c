@@ -52,25 +52,23 @@ void print_int(int num) {
     }
 }
 
-void ffiprintf(unsigned char *c, long clen, unsigned char *a, long alen) {
-    microkit_dbg_puts("my printf: ");
+void ffiprint_int(unsigned char *c, long clen, unsigned char *a, long alen) {
+    microkit_dbg_puts("FFI print int:\n");
     microkit_dbg_putc(((char) clen) + 48);
     microkit_dbg_putc(',');
     microkit_dbg_putc(((char) alen) + 48);
     microkit_dbg_putc('\n');
 }
 
-void ffiprint_int(unsigned char *c, long clen, unsigned char *a, long alen) {
-
-    microkit_dbg_puts("The address of c is -- (");
-    microkit_dbg_puts(c);
-    microkit_dbg_puts(")\n");
-
-    char arg = c[0];
-
-    microkit_dbg_puts("We received the following int --- (");
-    microkit_dbg_puts(arg);
-    microkit_dbg_puts(")\n");
+void ffiprint_address(unsigned char *c, long clen, unsigned char *a, long alen) {
+    microkit_dbg_puts("FFI print address:\n");
+    microkit_dbg_putc(((char) clen) + 48);
+    microkit_dbg_putc(',');
+    print_address((void *) c);
+    microkit_dbg_putc(((char) alen) + 48);
+    microkit_dbg_putc(',');
+    print_address((void *) a);
+    microkit_dbg_putc('\n');
 }
 
 /*
