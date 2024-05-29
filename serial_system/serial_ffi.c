@@ -263,21 +263,6 @@ void ffidequeue_avail(unsigned char *c, long clen, unsigned char *a, long alen) 
     ((uintptr_t *) a)[1] = result;
 }
 
-void ffienqueue_used(unsigned char *c, long clen, unsigned char *a, long alen) {
-    if (clen != 1 || alen != 1) {
-        microkit_dbg_puts("enqueue_used: There are no arguments supplied when args are expected");
-        a[0] = 0;
-        return;
-    }
-    // c has the address of the ring
-    ring_handle_t *ring = (ring_handle_t *) c;
-    // a has the address of the buffer
-    uintptr_t buffer = *(uintptr_t *) a;
-    void *cookie = 0;
-    int result = enqueue_used(ring, buffer, 1, &cookie);
-    ((uintptr_t *) a)[1] = result;
-}
-
 void ffidriver_dequeue(unsigned char *c, long clen, unsigned char *a, long alen) {
     if (clen != 1 || alen != 1) {
         microkit_dbg_puts("driver_dequeue: There are no arguments supplied when args are expected");

@@ -1,41 +1,80 @@
 
-fun ring_write_idx(1 ring_addr) {
-    var write_idx_addr = @base;
-    @transfer_hw(ring_addr, 1, write_idx_addr, 1);
+/* Buffer descriptor
+typedef struct buff_desc {
+    uintptr_t encoded_addr; // encoded dma addresses
+    uint64_t len; // associated memory lengths
+    void *cookie; // index into client side metadata
+} buff_desc_t;
+*/
+
+fun buff_desc_encoded_addr(1 buff_desc) {
+    var encoded_addr = 0;
+    !ldw encoded_addr, buff_desc;
+    return encoded_addr;
+}
+
+fun buff_desc_encoded_addr_set(1 buff_desc, 1 buffer) {
+    !stw buffer, buff_desc;
+    return 0;
+}
+
+fun buff_desc_len(1 buff_desc) {
+    var len = 0;
+    !ldw len, buff_desc + 8;
+    return len;
+}
+
+fun buff_desc_len_set(1 buff_desc, 1 len) {
+    !stw len, buff_desc + 8;
+    return 0;
+}
+
+fun buff_desc_cookie(1 buff_desc) {
+    var cookie = 0;
+    !ldw cookie, buff_desc + 16;
+    return cookie;
+}
+
+fun buff_desc_cookie_set(1 buff_desc, 1 cookie) {
+    !stw cookie, buff_desc + 16;
+    return 0;
+}
+
+/* Circular buffer containing descriptors
+typedef struct ring_buffer {
+    uint64_t write_idx;
+    uint64_t read_idx;
+    buff_desc_t buffers[SIZE];
+} ring_buffer_t;
+*/
+
+fun ring_buffer_write_idx(1 ring) {
     var write_idx = 0;
-    write_idx = lds {1} write_idx_addr;
+    !ldw write_idx, ring;
     return write_idx;
 }
 
-fun ring_read_idx(1 ring_addr) {
-    var read_idx_addr = @base;
-    @transfer_hw(ring_addr + 4, 1, read_idx_addr, 1);
+fun ring_buffer_write_idx_set(1 ring, 1 write_idx) {
+    !stw write_idx, ring;
+    return 0;
+}
+
+fun ring_buffer_read_idx(1 ring) {
     var read_idx = 0;
-    read_idx = lds {1} read_idx_addr;
+    !ldw read_idx, ring + 8;
     return read_idx;
 }
 
-fun incr_ring_write_idx(1 ring_addr) {
-    var write_idx_addr = @base;
-    @transfer_hw(ring_addr, 1, write_idx_addr, 1);
-    var write_idx = 0;
-    write_idx = lds {1} write_idx_addr;
-    var write_idx_addr2 = @base + 4;
-    stw write_idx + 1, write_idx_addr2;
-    @transfer_hw(write_idx_addr2, 1, ring_addr, 1);
+fun ring_buffer_read_idx_set(1 ring, 1 read_idx) {
+    !stw read_idx, ring + 8;
     return 0;
 }
 
 // Returns `&ring->buffers[idx % SIZE]`, assuming SIZE=512
-fun ring_buffer_get(1 ring_addr, 1 idx) {
+fun ring_buffer_buffers(1 ring, 1 idx) {
     var write_idx = 0;
     write_idx = pnk_modulo512(idx);
-
-    // TODO: hardcode assumpution about `struct ring_buffer`
-    var buffer = 0;
-    !ldw buffer, ring_addr + 8;
     // 24 is sizeof(buff_desc_t) which is element of `buffers` array
-    var offset = 8 + 24 * idx;
-    buffer = buffer + offset;
-    return buffer;
+    var offset = 16 + 24 * idx;
+    return (ring + offset);
 }

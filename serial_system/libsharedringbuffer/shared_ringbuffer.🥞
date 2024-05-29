@@ -10,19 +10,19 @@ fun ring_init(1 ring_addr, 1 avail, 1 used) {
 fun ring_empty(1 ring) {
     var write_idx = 0;
     var read_idx = 0;
-    write_idx = ring_write_idx(ring);
-    read_idx = ring_read_idx(ring);
+    write_idx = ring_buffer_write_idx(ring);
+    read_idx = ring_buffer_read_idx(ring);
 
     var diff = 0;
     diff = pnk_modulo512((write_idx - read_idx));
-    return (diff != 0);
+    return (diff == 0);
 }
 
 fun ring_full(1 ring) {
     var write_idx = 0;
     var read_idx = 0;
-    write_idx = ring_write_idx(ring);
-    read_idx = ring_read_idx(ring);
+    write_idx = ring_buffer_write_idx(ring);
+    read_idx = ring_buffer_read_idx(ring);
 
     var diff = 0;
     diff = pnk_modulo512((write_idx - read_idx + 1));
@@ -33,48 +33,50 @@ fun ring_full(1 ring) {
 fun ring_size(1 ring) {
     var write_idx = 0;
     var read_idx = 0;
-    write_idx = ring_write_idx(ring);
-    read_idx = ring_read_idx(ring);
+    write_idx = ring_buffer_write_idx(ring);
+    read_idx = ring_buffer_read_idx(ring);
     return (write_idx - read_idx);
 }
 
 
 fun notify(1 ring_handle_addr) {
-    var notify = 0;
-    // TODO: hardcode assumption about `struct ring_handle`
-    notify = lds {1} ring_handle_addr + 3;
+    var notify = (lds {1} ring_handle_addr + 16);
     @funcall(notify, 1, 0, 0);
     return 0;
 }
 
-// TODO: do we still need cookie?
 fun enqueue(1 ring, 1 buffer, 1 len, 1 cookie) {
     var full = 0;
     full = ring_full(ring);
     if (full) {
         return -1;
     }
+
     var write_idx = 0;
-    write_idx = ring_write_idx(ring);
+    write_idx = ring_buffer_write_idx(ring);
     var buffer_ptr = 0;
-    buffer_ptr = ring_buffer_get(ring, write_idx);
+    buffer_ptr = ring_buffer_buffers(ring, write_idx);
 
-    // assign buff_desc->encoded_addr
     !stw buffer, buffer_ptr;
-    // assign buff_desc->len
-    !st8 len, buffer_ptr + 4;
-    // assign buff_desc->cookie
-    !stw cookie, buffer_ptr + 6;
-    // ring->write_idx ++
+    !st8 len, buffer_ptr + 8;
+    !stw cookie, buffer_ptr + 16;
 
-    @THREAD_MEMORY_RELEASE(42,0,42,0);
+    ring_buffer_write_idx_set(ring, (write_idx + 1));
+    @THREAD_MEMORY_RELEASE(0,42,0,42);
+    return 0;
 }
 
 fun enqueue_used(1 ring, 1 addr, 1 len, 1 cookie) {
-    var used = 0;
-    used = lds {1} ring;
+    var used_ring = (lds {1} ring);
     var ret = 0;
-    ret = enqueue(used, addr, len, cookie);
+    ret = enqueue(used_ring, addr, len, cookie);
+    return ret;
+}
+
+fun enqueue_avail(1 ring, 1 addr, 1 len, 1 cookie) {
+    var avail_ring = (lds {1} ring + 8);
+    var ret = 0;
+    ret = enqueue(avail_ring, addr, len, cookie);
     return ret;
 }
 
@@ -86,9 +88,4 @@ fun driver_dequeue() {
 fun driver_enqueue() {
     return -1;
 }
-
-fun enqueue_avail() {
-    return -1;
-}
-
 */
