@@ -187,19 +187,21 @@ fun serial_driver_dequeue_used(1 rx_tx, 1 copy_dst) {
 		ring = get_tx_ring();
 	}
 
-	var buffer_addr = @base + 528;
-	@driver_dequeue(ring, 1, buffer_addr, 1);
-	var ret = (lds {1} buffer_addr + 8);
+	var buffer_ptr = @base + 512;
+	var len_ptr = @base + 520;
+	var cookie_ptr = @base + 528;
+	var ret = 0;
+	ret = dequeue_used(ring, buffer_ptr, len_ptr, cookie_ptr);
 
 	if (ret != 0) {
 		return 0;
 	} else {
-		var buffer_len = (lds {1} buffer_addr + 16);
+		var buffer_len = (lds {1} len_ptr);
 		if (buffer_len > 1024) {
 			return -1;
 		}
 		if (buffer_len > 0) {
-			var buffer = (lds {1} buffer_addr);
+			var buffer = (lds {1} buffer_ptr);
 			pnk_memcpy(copy_dst, buffer, buffer_len);
 		}
 		return buffer_len;

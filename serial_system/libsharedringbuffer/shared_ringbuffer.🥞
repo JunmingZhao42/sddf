@@ -112,6 +112,13 @@ fun enqueue_avail(1 ring, 1 addr, 1 len, 1 cookie) {
     return ret;
 }
 
+fun dequeue_used(1 ring, 1 addr, 1 len_ptr, 1 cookie_ptr) {
+    var used_ring = (lds {1} ring);
+    var ret = 0;
+    ret = dequeue(used_ring, addr, len_ptr, cookie_ptr);
+    return ret;
+}
+
 fun dequeue_avail(1 ring, 1 addr, 1 len_ptr, 1 cookie_ptr) {
     var avail_ring = (lds {1} ring + 8);
     var ret = 0;
@@ -119,7 +126,3 @@ fun dequeue_avail(1 ring, 1 addr, 1 len_ptr, 1 cookie_ptr) {
     return ret;
 }
 
-fun driver_dequeue(1 ring, 1 addr, 1 len_ptr, 1 cookie_ptr) {
-    var used_ring = (lds {1} ring);
-    return -1;
-}

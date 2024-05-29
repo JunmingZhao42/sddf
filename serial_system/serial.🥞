@@ -32,61 +32,48 @@ fun main() {
 }
 
 export fun handle_tx() {
-	var buffer_addr = @base + 544;
-	while true {
-		var ret = 0;
-		// 1: dequeue_used tx
-		ret = serial_driver_dequeue_used(1, buffer_addr);
-		if (ret == 0) {
+	var local_buff = @base + 544;
+	var ret = 0;
+	// 1: dequeue_used tx
+	ret = serial_driver_dequeue_used(1, local_buff);
+	if (ret == 0) {
+		return -1;
+	}
+
+	var temp = 1;
+	while (temp > 0) {
+		// break when the content is 0
+		temp = ld8 local_buff;
+		if (temp < 1) {
 			break;
 		}
-		var buff_len = 0;
-		var phys = buffer_addr;
-		var i = 0;
-		var temp = 1;
-		while (temp > 0) {
-			temp = ld8 phys;
-			if (temp < 1) {
-				break;
-			}
 
-			var rawtx_ret = 1;
-			while (rawtx_ret != 0) {
-				var tx_fifo_ret = 0;
-				tx_fifo_ret = internal_is_tx_fifo_busy();
-				if (tx_fifo_ret == 1) {
-					continue;
-				} else {
-					if (temp == 10) {
+		while (true) {
+			var tx_fifo_ret = 0;
+			tx_fifo_ret = internal_is_tx_fifo_busy();
+			if (tx_fifo_ret == 1) {
+				continue;
+			} else {
+				if (temp == 10) {
 					// 13: '\n'
 					putchar_regs(13);
-					}
-					var putchar_break = 0;
-					while (putchar_break == 0) {
-					tx_fifo_ret = internal_is_tx_fifo_busy();
-						if (tx_fifo_ret != 1) {
-							putchar_regs(temp);
-							putchar_break = 1;
-						}
-					}
-
-					rawtx_ret = 0;
 				}
+				while (true) {
+					tx_fifo_ret = internal_is_tx_fifo_busy();
+					if (tx_fifo_ret != 1) {
+						putchar_regs(temp);
+						break;
+					}
+				}
+				break;
 			}
-
-			i = i + 1;
-			phys = phys + 1;
 		}
-
-		var ret2 = 0;
-		// 1: enqueue_avail tx
-		ret2 = serial_enqueue_avail(1);
-		if (ret2 != 0) {
-			return -1;
-		} else {
-			return 0;
-		}
+		local_buff = local_buff + 1;
 	}
+
+	// 1: enqueue_avail tx
+	ret = serial_enqueue_avail(1);
+	return ret;
 }
 
 export fun handle_rx() {
