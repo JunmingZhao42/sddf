@@ -9,65 +9,18 @@ cd cake-x64-64/
 make cake
 ```
 
-## Building the sDDF
-
-    $ cd echo_server
-    $ make BUILD_DIR=<path/to/build> MICROKIT_SDK=<path/to/microkit/sdk> CAKE_COMPILER=<path/to/cake/compiler/binary> MICROKIT_BOARD=imx8mm MICROKIT_CONFIG=(release/debug)
-
-## Notes on building Pancake
-We will need to modify an output file, and recompile. This is because of the auto-genrated assembly code outputted by the cake compiler wishing to call
-to a `cml_exit` function rather than return from where it was called, which is the behaviour we want.
-
-<!-- TODO: Remove this: -->
-
-In `serial.S`, please add line
+To use the newest version of cake compiler with multiple entry points feature, download the newest `cake-sexpr-version` and build the compiler:
 ```
-cdecl(ret_third): .quad 0
-```
-right after line
-```
-cdecl(ret_base): .quad 0
+$ CML_STACK_SIZE=1000 CML_HEAP_SIZE=6000 ./path/to/cake-x64-64/cake --sexp=true --exclude_prelude=true --skip_type_inference=true --emit_empty_ffi=true --reg_alg=0 < ./cake-sexpr-version  > cake_sexp.S
+$ gcc ./path/to/cake-x64-64/basis_ffi.c cake_sexp.S -o cake-new
 ```
 
-Replace `cake_enter` with:
+## Building the serial driver
 ```
-cake_enter:
-     str    x30, [sp, #-32]!
-     str    x28, [sp, #-32]!
-     str    x27, [sp, #-32]!
-     str    x25, [sp, #-32]!
-     _ldrel x9, cdecl(ret_stack)
-     ldr    x25, [x9]
-     cbz    x25, cake_err3
-     str    xzr, [x9]
-     _ldrel x9, cdecl(ret_base)
-     ldr    x28, [x9]
-     cbz    x28, cake_err3
-     str    xzr, [x9]
-     _ldrel x9, cdecl(ret_third)
-     ldr    x27, [x9]
-     _ldrel x30, cake_ret
-     br     x10
-     .p2align 4
+$ cd serial_system
+$ make BUILD_DIR=<path/to/build> MICROKIT_SDK=<path/to/microkit/sdk> CAKE_COMPILER=<path/to/cake/compiler/binary> MICROKIT_BOARD=imx8mm MICROKIT_CONFIG=(release/debug)
 ```
 
-Replace `cake_return` with:
-
-```
-cake_return:
-     _ldrel x9, cdecl(ret_stack)
-     str    x25, [x9]
-     _ldrel x9, cdecl(ret_base)
-     str    x28, [x9]
-     _ldrel x9, cdecl(ret_third)
-     str    x27, [x9]
-     ldr    x25, [sp], #32
-     ldr    x27, [sp], #32
-     ldr    x28, [sp], #32
-     ldr    x30, [sp], #32
-     ret
-     .p2align 4
-```
 ## Supported Boards
 
 ### iMX8MM-EVK
