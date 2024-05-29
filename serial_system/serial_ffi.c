@@ -300,6 +300,7 @@ void notified(microkit_channel ch) {
     }
     if (ch == IRQ_CH) {
         handle_irq();
+        microkit_notify(RX_CH);
         microkit_irq_ack(IRQ_CH);
     }
 }

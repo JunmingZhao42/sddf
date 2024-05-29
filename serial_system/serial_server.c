@@ -16,6 +16,7 @@ uintptr_t tx_used;
 uintptr_t shared_dma;
 
 struct serial_server global_serial_server = {0};
+char global_test;
 
 /*
 Return -1 on failure.
@@ -222,5 +223,12 @@ void init(void) {
 
 
 void notified(microkit_channel ch) {
+    if (ch == SERVER_GETCHAR_CHANNEL) {
+        global_test = getchar();
+        serial_server_printf(&global_test);
+        if (global_test == '\03' || global_test == '\04' || global_test == '\r') {
+            serial_server_printf("\n");
+        }
+    }
     return;
 }
