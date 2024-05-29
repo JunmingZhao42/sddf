@@ -27,7 +27,7 @@ int serial_server_printf(char *string) {
     // Address that we will pass to dequeue to store the buffer address
     uintptr_t buffer = 0;
     // Integer to store the length of the buffer
-    unsigned int buffer_len = 0;
+    uint64_t buffer_len = 0;
     void *cookie = 0;
 
     // Dequeue a buffer from the available ring from the tx buffer
@@ -91,7 +91,7 @@ int getchar() {
     // Address that we will pass to dequeue to store the buffer address
     uintptr_t buffer = 0;
     // Integer to store the length of the buffer
-    unsigned int buffer_len = 0;
+    uint64_t buffer_len = 0;
 
     void *cookie = 0;
 

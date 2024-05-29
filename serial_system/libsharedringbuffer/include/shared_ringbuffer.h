@@ -19,14 +19,14 @@ typedef void (*notify_fn)(void);
 /* Buffer descriptor */
 typedef struct buff_desc {
     uintptr_t encoded_addr; /* encoded dma addresses */
-    unsigned int len; /* associated memory lengths */
+    uint64_t len; /* associated memory lengths */
     void *cookie; /* index into client side metadata */
 } buff_desc_t;
 
 /* Circular buffer containing descriptors */
 typedef struct ring_buffer {
-    uint32_t write_idx;
-    uint32_t read_idx;
+    uint64_t write_idx;
+    uint64_t read_idx;
     buff_desc_t buffers[SIZE];
 } ring_buffer_t;
 
@@ -100,7 +100,7 @@ static inline void notify(ring_handle_t *ring)
  *
  * @return -1 when ring is empty, 0 on success.
  */
-static inline int enqueue(ring_buffer_t *ring, uintptr_t buffer, unsigned int len, void *cookie)
+static inline int enqueue(ring_buffer_t *ring, uintptr_t buffer, uint64_t len, void *cookie)
 {
     if (ring_full(ring)) {
         microkit_dbg_puts("Ring full");
@@ -127,7 +127,7 @@ static inline int enqueue(ring_buffer_t *ring, uintptr_t buffer, unsigned int le
  *
  * @return -1 when ring is empty, 0 on success.
  */
-static inline int dequeue(ring_buffer_t *ring, uintptr_t *addr, unsigned int *len, void **cookie)
+static inline int dequeue(ring_buffer_t *ring, uintptr_t *addr, uint64_t *len, void **cookie)
 {
     if (ring_empty(ring)) {
         // microkit_dbg_puts("Ring is empty");
@@ -155,7 +155,7 @@ static inline int dequeue(ring_buffer_t *ring, uintptr_t *addr, unsigned int *le
  *
  * @return -1 when ring is empty, 0 on success.
  */
-static inline int enqueue_avail(ring_handle_t *ring, uintptr_t addr, unsigned int len, void *cookie)
+static inline int enqueue_avail(ring_handle_t *ring, uintptr_t addr, uint64_t len, void *cookie)
 {
     return enqueue(ring->avail_ring, addr, len, cookie);
 }
@@ -171,7 +171,7 @@ static inline int enqueue_avail(ring_handle_t *ring, uintptr_t addr, unsigned in
  *
  * @return -1 when ring is empty, 0 on success.
  */
-static inline int enqueue_used(ring_handle_t *ring, uintptr_t addr, unsigned int len, void *cookie)
+static inline int enqueue_used(ring_handle_t *ring, uintptr_t addr, uint64_t len, void *cookie)
 {
     // seems `len` usage is inconsistent betwwen used and avail
     return enqueue(ring->used_ring, addr, len, cookie);
@@ -187,7 +187,7 @@ static inline int enqueue_used(ring_handle_t *ring, uintptr_t addr, unsigned int
  *
  * @return -1 when ring is empty, 0 on success.
  */
-static inline int dequeue_avail(ring_handle_t *ring, uintptr_t *addr, unsigned int *len, void **cookie)
+static inline int dequeue_avail(ring_handle_t *ring, uintptr_t *addr, uint64_t *len, void **cookie)
 {
     return dequeue(ring->avail_ring, addr, len, cookie);
 }
@@ -202,7 +202,7 @@ static inline int dequeue_avail(ring_handle_t *ring, uintptr_t *addr, unsigned i
  *
  * @return -1 when ring is empty, 0 on success.
  */
-static inline int dequeue_used(ring_handle_t *ring, uintptr_t *addr, unsigned int *len, void **cookie)
+static inline int dequeue_used(ring_handle_t *ring, uintptr_t *addr, uint64_t *len, void **cookie)
 {
     return dequeue(ring->used_ring, addr, len, cookie);
 }
@@ -219,7 +219,7 @@ static inline int dequeue_used(ring_handle_t *ring, uintptr_t *addr, unsigned in
  *
  * @return -1 when ring is empty, 0 on success.
  */
-static int driver_dequeue(ring_buffer_t *ring, uintptr_t *addr, unsigned int *len, void **cookie)
+static int driver_dequeue(ring_buffer_t *ring, uintptr_t *addr, uint64_t *len, void **cookie)
 {
     if (!((ring->write_idx - ring->read_idx) % SIZE)) {
         return -1;

@@ -255,7 +255,7 @@ void ffidequeue_avail(unsigned char *c, long clen, unsigned char *a, long alen) 
     // c has the address of the ring
     ring_handle_t *ring = (ring_handle_t *) c;
     uintptr_t buffer = 0;
-    unsigned int buffer_len = 0;
+    uint64_t buffer_len = 0;
     void *cookie = 0;
 
     int result = dequeue_avail(ring, &buffer, &buffer_len, &cookie);
@@ -288,7 +288,7 @@ void ffidriver_dequeue(unsigned char *c, long clen, unsigned char *a, long alen)
     ring_handle_t *ring = (ring_handle_t *) c;
     void *cookie = 0;
     uintptr_t buffer = 0;
-    unsigned int buffer_len = 0;
+    uint64_t buffer_len = 0;
     int result = driver_dequeue(ring->used_ring, &buffer, &buffer_len, &cookie);
     ((uintptr_t *) a)[0] = buffer;
     ((uintptr_t *) a)[1] = result;
@@ -305,7 +305,7 @@ void ffienqueue_avail(unsigned char *c, long clen, unsigned char *a, long alen) 
     ring_handle_t *ring = (ring_handle_t *) c;
     void *cookie = 0;
     uintptr_t buffer = 0;
-    unsigned int buffer_len = 0;
+    uint64_t buffer_len = 0;
     int result = enqueue_avail(ring, &buffer, &buffer_len, cookie);
     ((uintptr_t *) a)[0] = result;
 }

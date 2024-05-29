@@ -1,6 +1,7 @@
 #ifndef DEBUG_H
 #define DEBUG_H
 
+void print_int(int num);
 void print_address(void* addr);
 void ffiprint_int(unsigned char *c, long clen, unsigned char *a, long alen);
 void ffiprint_address(unsigned char *c, long clen, unsigned char *a, long alen);
