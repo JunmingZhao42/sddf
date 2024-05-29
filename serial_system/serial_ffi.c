@@ -280,21 +280,6 @@ void ffidriver_dequeue(unsigned char *c, long clen, unsigned char *a, long alen)
     ((uintptr_t *) a)[2] = buffer_len;
 }
 
-void ffienqueue_avail(unsigned char *c, long clen, unsigned char *a, long alen) {
-    if (clen != 1 || alen != 0) {
-        microkit_dbg_puts("enqueue_avail: There are no arguments supplied when args are expected");
-        c[0] = -1;
-        return;
-    }
-    // c has the address of the ring
-    ring_handle_t *ring = (ring_handle_t *) c;
-    void *cookie = 0;
-    uintptr_t buffer = 0;
-    uint64_t buffer_len = 0;
-    int result = enqueue_avail(ring, &buffer, &buffer_len, cookie);
-    ((uintptr_t *) a)[0] = result;
-}
-
 void init_pancake_mem() {
     unsigned long sz = 1024*1024; // 1 MB unit\n",
     unsigned long cml_heap_sz = sz;    // Default: 1 MB heap\n", (* TODO: parameterise *)

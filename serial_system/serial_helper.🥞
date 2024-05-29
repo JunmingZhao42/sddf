@@ -171,9 +171,9 @@ fun serial_enqueue_used(1 rx_tx, 1 input, 1 buffer_addr) {
 		ring = get_tx_ring();
 	}
 
-	var cookie = @base + 512;
+	// TODO: here cookie = 0
 	var ret = 0;
-	ret = enqueue_used(ring, buffer, 1, cookie);
+	ret = enqueue_used(ring, buffer, 1, 0);
 	return ret;
 }
 
@@ -212,7 +212,8 @@ fun serial_enqueue_avail(1 rx_tx) {
 		ring = get_tx_ring();
 	}
 
-	var result_addr = @base + 512;
-	@enqueue_avail(ring, 1, result_addr, 0);
-	return (lds {1} result_addr);
+	// TODO: not sure why here we don't need buffer, len, cookie
+	var ret = 0;
+	ret = enqueue_avail(ring, 0, 0, 0);
+	return ret;
 }
