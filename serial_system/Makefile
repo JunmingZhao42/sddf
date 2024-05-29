@@ -56,7 +56,7 @@ $(BUILD_DIR)/serial.o: $(BUILD_DIR)/serial.S Makefile
 	$(CC) -c -mcpu=$(CPU) $< -o $@
 
 # Define the list of .🥞 files
-PANCAKE_FILES = serial.🥞 serial_helper.🥞 util.🥞 libsharedringbuffer/shared_ringbuffer.🥞
+PANCAKE_FILES = serial.🥞 serial_helper.🥞 util.🥞 libsharedringbuffer/shared_ringbuffer.🥞 libsharedringbuffer/ringbuff_helper.🥞
 
 $(BUILD_DIR)/serial.S: $(PANCAKE_FILES) Makefile
 	cat $(PANCAKE_FILES) | $(CAKE_COMPILER) --target=arm8 --pancake --main_return=true > $@

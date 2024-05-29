@@ -1,0 +1,41 @@
+
+fun ring_write_idx(1 ring_addr) {
+    var write_idx_addr = @base;
+    @transfer_hw(ring_addr, 1, write_idx_addr, 1);
+    var write_idx = 0;
+    write_idx = lds {1} write_idx_addr;
+    return write_idx;
+}
+
+fun ring_read_idx(1 ring_addr) {
+    var read_idx_addr = @base;
+    @transfer_hw(ring_addr + 4, 1, read_idx_addr, 1);
+    var read_idx = 0;
+    read_idx = lds {1} read_idx_addr;
+    return read_idx;
+}
+
+fun incr_ring_write_idx(1 ring_addr) {
+    var write_idx_addr = @base;
+    @transfer_hw(ring_addr, 1, write_idx_addr, 1);
+    var write_idx = 0;
+    write_idx = lds {1} write_idx_addr;
+    var write_idx_addr2 = @base + 4;
+    stw write_idx + 1, write_idx_addr2;
+    @transfer_hw(write_idx_addr2, 1, ring_addr, 1);
+    return 0;
+}
+
+// Returns `&ring->buffers[idx % SIZE]`, assuming SIZE=512
+fun ring_buffer_get(1 ring_addr, 1 idx) {
+    var write_idx = 0;
+    write_idx = pnk_modulo512(idx);
+
+    // TODO: hardcode assumpution about `struct ring_buffer`
+    var buffer = 0;
+    !ldw buffer, ring_addr + 8;
+    // 24 is sizeof(buff_desc_t) which is element of `buffers` array
+    var offset = 8 + 24 * idx;
+    buffer = buffer + offset;
+    return buffer;
+}

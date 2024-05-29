@@ -14,37 +14,27 @@ fun get_uart_base() {
 
 fun get_rx_avail() {
 	var rx_avail_addr = @base + 8;
-	var rx_avail = 0;
-	rx_avail = lds {1} rx_avail_addr;
-	return rx_avail;
+	return (lds {1} rx_avail_addr);
 }
 
 fun get_rx_used() {
 	var rx_used_addr = @base + 8*2;
-	var rx_used = 0;
-	rx_used = lds {1} rx_used_addr;
-	return rx_used;
+	return (lds {1} rx_used_addr);
 }
 
 fun get_tx_avail() {
 	var tx_avail_addr = @base + 8*3;
-	var tx_avail = 0;
-	tx_avail = lds {1} tx_avail_addr;
-	return tx_avail;
+	return (lds {1} tx_avail_addr);
 }
 
 fun get_tx_used() {
 	var tx_used_addr = @base + 8*4;
-	var tx_used = 0;
-	tx_used = lds {1} tx_used_addr;
-	return tx_used;
+	return (lds {1} tx_used_addr);
 }
 
 fun get_shared_dma_vaddr() {
 	var vaddr_addr = @base + 8*5;
-	var vaddr = 0;
-	vaddr = lds {1} vaddr_addr;
-	return vaddr;
+	return (lds {1} vaddr_addr);
 }
 
 fun reset_num_chars() {
@@ -56,23 +46,19 @@ fun reset_num_chars() {
 
 fun get_num_chars() {
 	var num_addr = @base + 8*6;
-	var num = 0;
-	num = lds {1} num_addr;
-	return num;
+	return (lds {1} num_addr);
 }
 
 fun increment_num_chars() {
 	var num_addr = @base + 8*6;
-	var num = 0;
-	num = lds {1} num_addr;
+	var num = (lds {1} num_addr);
 	stw num_addr, num + 1;
 	return 0;
 }
 
 fun decrement_num_chars() {
 	var num_addr = @base + 8*6;
-	var num = 0;
-	num = lds {1} num_addr;
+	var num = (lds {1} num_addr);
 	stw num_addr, num - 1;
 	return 0;
 }
@@ -166,8 +152,7 @@ fun serial_dequeue_avail(1 rx_tx, 1 buffer_addr) {
 
 	@dequeue_avail(ring, 1, buffer_addr, 1);
 	// ring now contains the dequeue result
-	var success = 0;
-	success = lds {1} buffer_addr + 8;
+	var success = (lds {1} buffer_addr + 8);
 	if (success == 0) {
 		decrement_num_chars();
 	}
@@ -176,8 +161,7 @@ fun serial_dequeue_avail(1 rx_tx, 1 buffer_addr) {
 }
 
 fun serial_enqueue_used(1 rx_tx, 1 input, 1 buffer_addr) {
-	var buffer = 0;
-	buffer = lds {1} buffer_addr;
+	var buffer = (lds {1} buffer_addr);
 	!st8 input, buffer;
 
 	var ring = 0;
@@ -188,10 +172,7 @@ fun serial_enqueue_used(1 rx_tx, 1 input, 1 buffer_addr) {
 	}
 
 	@enqueue_used(ring, 1, buffer_addr, 1);
-	// ring now contains the enqueue result
-	var ret = 0;
-	ret = lds {1} buffer_addr + 8;
-	return ret;
+	return (lds {1} buffer_addr + 8);
 }
 
 fun serial_driver_dequeue_used(1 rx_tx, 1 copy_dst) {
@@ -204,21 +185,17 @@ fun serial_driver_dequeue_used(1 rx_tx, 1 copy_dst) {
 
 	var buffer_addr = @base + 528;
 	@driver_dequeue(ring, 1, buffer_addr, 1);
-	// ring now contains the dequeue result
-	var ret = 0;
-	ret = lds {1} buffer_addr + 8;
+	var ret = (lds {1} buffer_addr + 8);
 
 	if (ret != 0) {
 		return 0;
 	} else {
-		var buffer_len = 0;
-		buffer_len = lds {1} buffer_addr + 16;
+		var buffer_len = (lds {1} buffer_addr + 16);
 		if (buffer_len > 1024) {
 			return -1;
 		}
 		if (buffer_len > 0) {
-			var buffer = 0;
-			buffer = lds {1} buffer_addr;
+			var buffer = (lds {1} buffer_addr);
 			pnk_memcpy(copy_dst, buffer, buffer_len);
 		}
 		return buffer_len;
@@ -235,8 +212,5 @@ fun serial_enqueue_avail(1 rx_tx) {
 
 	var result_addr = @base + 512;
 	@enqueue_avail(ring, 1, result_addr, 0);
-	// ring now contains the enqueue result
-	var ret = 0;
-	ret = lds {1} result_addr;
-	return ret;
+	return (lds {1} result_addr);
 }
