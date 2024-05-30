@@ -1,4 +1,4 @@
-#include "serial_server.h"
+#include "server.h"
 #include "serial.h"
 #include "shared_ringbuffer.h"
 #include <string.h>
@@ -17,6 +17,39 @@ uintptr_t shared_dma;
 
 struct serial_server global_serial_server = {0};
 char global_test;
+
+static char cml_memory[1024*1024*2];
+
+extern void cml_main(void);
+extern void *cml_heap;
+extern void *cml_stack;
+extern void *cml_stackend;
+
+void cml_exit(int arg) {
+    microkit_dbg_puts("ERROR! We should not be getting here\n");
+}
+
+void cml_err(int arg) {
+    if (arg == 3) {
+        microkit_dbg_puts("Memory not ready for entry. You may have not run the init code yet, or be trying to enter during an FFI call.\n");
+    }
+
+  cml_exit(arg);
+}
+
+/* Need to come up with a replacement for this clear cache function. Might be worth testing just flushing the entire l1 cache, but might cause issues with returning to this file*/
+void cml_clear() {
+    microkit_dbg_puts("Trying to clear cache\n");
+}
+
+void init_pancake_mem() {
+    unsigned long sz = 1024*1024; // 1 MB unit\n",
+    unsigned long cml_heap_sz = sz;    // Default: 1 MB heap\n", (* TODO: parameterise *)
+    unsigned long cml_stack_sz = sz;   // Default: 1 MB stack\n", (* TODO: parameterise *)
+    cml_heap = cml_memory;
+    cml_stack = cml_heap + cml_heap_sz;
+    cml_stackend = cml_stack + cml_stack_sz;
+}
 
 /*
 Return -1 on failure.
@@ -157,6 +190,9 @@ int serial_server_scanf(char* buffer) {
 
 // Init function required by microkit, initialise serial datastructres for server here
 void init(void) {
+    init_pancake_mem();
+    cml_main();
+
     microkit_dbg_puts(microkit_name);
     microkit_dbg_puts(": elf PD init function running\n");
 

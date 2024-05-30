@@ -13,8 +13,6 @@
 #include <string.h>
 #include <sel4/sel4.h>
 #include "serial.h"
-#include "shared_ringbuffer.h"
-#include "serial_driver_data.h"
 #include "debug.h"
 
 #ifdef EVAL
@@ -61,10 +59,6 @@ extern void handle_irq(void);
 extern void *cml_heap;
 extern void *cml_stack;
 extern void *cml_stackend;
-
-extern char cake_text_begin;
-extern char cake_codebuffer_begin;
-extern char cake_codebuffer_end;
 
 void ffiget_shared_mem_addr(unsigned char *c, long clen, unsigned char *a, long alen) {
     if (alen != 1 || clen < 1) {

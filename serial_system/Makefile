@@ -36,7 +36,7 @@ RINGBUFFERDIR=libsharedringbuffer
 
 BOARD_DIR := $(MICROKIT_SDK)/board/$(MICROKIT_BOARD)/$(MICROKIT_CONFIG)
 
-IMAGES := serial.elf serial_server.elf
+IMAGES := serial.elf server.elf
 CFLAGS := -mcpu=$(CPU) -mstrict-align -ffreestanding -g3 -O3 -Wall  -Wno-unused-function
 LDFLAGS := -L$(BOARD_DIR)/lib -Llib
 LIBS := -lc -lmicrokit -Tmicrokit.ld
@@ -49,17 +49,23 @@ CFLAGS += -I$(BOARD_DIR)/include \
 	-I$(RINGBUFFERDIR)/include \
 
 SERIAL_OBJS := serial.o serial_ffi.o debug.o
-SERIAL_SERVER_OBJS := serial_server.o libsharedringbuffer/shared_ringbuffer.o
+SERVER_OBJS := server.o server_ffi.o libsharedringbuffer/shared_ringbuffer.o debug.o
 all: directories $(IMAGE_FILE)
+
+SERIAL_PNK = serial.🥞 serial_helper.🥞 util.🥞 libsharedringbuffer/shared_ringbuffer.🥞 libsharedringbuffer/ringbuff_helper.🥞
+SERVER_PNK = server.🥞 util.🥞 libsharedringbuffer/shared_ringbuffer.🥞 libsharedringbuffer/ringbuff_helper.🥞
 
 $(BUILD_DIR)/serial.o: $(BUILD_DIR)/serial.S Makefile
 	$(CC) -c -mcpu=$(CPU) $< -o $@
 
-# Define the list of .🥞 files
-PANCAKE_FILES = serial.🥞 serial_helper.🥞 util.🥞 libsharedringbuffer/shared_ringbuffer.🥞 libsharedringbuffer/ringbuff_helper.🥞
+$(BUILD_DIR)/serial.S: $(SERIAL_PNK) Makefile
+	cat $(SERIAL_PNK) | $(CAKE_COMPILER) --target=arm8 --pancake --main_return=true > $@
 
-$(BUILD_DIR)/serial.S: $(PANCAKE_FILES) Makefile
-	cat $(PANCAKE_FILES) | $(CAKE_COMPILER) --target=arm8 --pancake --main_return=true > $@
+$(BUILD_DIR)/server.o: $(BUILD_DIR)/server.S Makefile
+	$(CC) -c -mcpu=$(CPU) $< -o $@
+
+$(BUILD_DIR)/server.S: $(SERVER_PNK) Makefile
+	cat $(SERVER_PNK) | $(CAKE_COMPILER) --target=arm8 --pancake --main_return=true > $@
 
 $(BUILD_DIR)/%.o: %.c Makefile
 	$(CC) -c $(CFLAGS) $< -o $@
@@ -70,7 +76,7 @@ $(BUILD_DIR)/debug.o: debug.c debug.h Makefile
 $(BUILD_DIR)/serial.elf: $(addprefix $(BUILD_DIR)/, $(SERIAL_OBJS))
 	$(LD) $(LDFLAGS) $^ $(LIBS) -o $@
 
-$(BUILD_DIR)/serial_server.elf: $(addprefix $(BUILD_DIR)/, $(SERIAL_SERVER_OBJS))
+$(BUILD_DIR)/server.elf: $(addprefix $(BUILD_DIR)/, $(SERVER_OBJS))
 	$(LD) $(LDFLAGS) $^ $(LIBS) -o $@
 
 $(IMAGE_FILE) $(REPORT_FILE): $(addprefix $(BUILD_DIR)/, $(IMAGES)) serial.system
