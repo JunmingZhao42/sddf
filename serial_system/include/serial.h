@@ -93,16 +93,5 @@ struct imx_uart_regs {
 };
 typedef volatile struct imx_uart_regs imx_uart_regs_t;
 
-/*
-serial driver struct akin to patrick's implementation*/
-struct serial_driver {
-    imx_uart_regs_t *regs;
-
-    ring_handle_t rx_ring;
-    ring_handle_t tx_ring;
-
-    int num_to_get_chars;
-};
-
 // Exposing the entry points for us to call from the notified functions
 void handle_notified(int ch);

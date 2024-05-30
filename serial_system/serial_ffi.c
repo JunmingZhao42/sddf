@@ -249,6 +249,18 @@ void init_pancake_mem() {
     cml_stackend = cml_stack + cml_stack_sz;
 }
 
+// Following the struct of `serial_driver`
+/*
+struct serial_driver {
+    imx_uart_regs_t *regs;
+
+    ring_handle_t rx_ring;
+    ring_handle_t tx_ring;
+
+    int num_to_get_chars;
+};
+*/
+
 void init_pancake_data() {
     uintptr_t *heap = (uintptr_t *) cml_heap;
     heap[0] = uart_base;
