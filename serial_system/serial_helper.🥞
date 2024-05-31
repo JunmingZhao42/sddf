@@ -69,7 +69,7 @@ fun get_rx_ring() {
 }
 
 fun get_tx_ring() {
-	var ring_base = @base + 8*11;
+	var ring_base = @base + 8*10;
 	return ring_base;
 }
 

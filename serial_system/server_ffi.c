@@ -14,8 +14,8 @@ uintptr_t tx_avail;
 uintptr_t tx_used;
 uintptr_t shared_dma;
 
-ring_handle_t rx_ring;
-ring_handle_t tx_ring;
+ring_handle_t* rx_ring;
+ring_handle_t* tx_ring;
 
 char global_test;
 
@@ -66,6 +66,8 @@ void init_pancake_data() {
     heap[3] = tx_avail;
     heap[4] = tx_used;
     heap[5] = shared_dma;
+    rx_ring = (ring_handle_t *) &heap[7];
+    tx_ring = (ring_handle_t *) &heap[10];
 }
 
 // TODO: move to pancake
@@ -82,7 +84,7 @@ int serial_server_printf(char *string) {
     void *cookie = 0;
 
     // Dequeue a buffer from the available ring from the tx buffer
-    int ret = dequeue_avail(&tx_ring, &buffer, &buffer_len, &cookie);
+    int ret = dequeue_avail(tx_ring, &buffer, &buffer_len, &cookie);
 
     if(ret != 0) {
         microkit_dbg_puts(microkit_name);
@@ -103,9 +105,9 @@ int serial_server_printf(char *string) {
     memcpy((char *) buffer, string, print_len);
 
     // We then need to add this buffer to the transmit used ring structure
-    bool is_empty = ring_empty(tx_ring.used_ring);
+    bool is_empty = ring_empty(tx_ring->used_ring);
 
-    ret = enqueue_used(&tx_ring, buffer, print_len, &cookie);
+    ret = enqueue_used(tx_ring, buffer, print_len, &cookie);
 
     if(ret != 0) {
         microkit_dbg_puts(microkit_name);
@@ -146,7 +148,7 @@ int getchar() {
 
     void *cookie = 0;
 
-    while (dequeue_used(&rx_ring, &buffer, &buffer_len, &cookie) != 0) {
+    while (dequeue_used(rx_ring, &buffer, &buffer_len, &cookie) != 0) {
         /* The ring is currently empty, as there is no character to get.
         We will spin here until we have gotten a character. As the driver is a higher priority than us,
         it should be able to pre-empt this loop
@@ -164,7 +166,7 @@ int getchar() {
 
     /* Now that we are finished with the used buffer, we can add it back to the available ring*/
 
-    int ret = enqueue_avail(&rx_ring, buffer, buffer_len, NULL);
+    int ret = enqueue_avail(rx_ring, buffer, buffer_len, NULL);
 
     if (ret != 0) {
         microkit_dbg_puts(microkit_name);
@@ -208,37 +210,11 @@ int serial_server_scanf(char* buffer) {
 // Init function required by microkit, initialise serial datastructres for server here
 void init(void) {
     init_pancake_mem();
+    init_pancake_data();
     cml_main();
 
     microkit_dbg_puts(microkit_name);
     microkit_dbg_puts(": elf PD init function running\n");
-
-    // Init the shared ring buffers
-    ring_init(&rx_ring, (ring_buffer_t *)rx_avail, (ring_buffer_t *)rx_used, NULL, 0);
-    // We will also need to populate these rings with memory from the shared dma region
-
-    // Add buffers to the rx ring
-    for (int i = 0; i < NUM_BUFFERS - 1; i++) {
-        int ret = enqueue_avail(&rx_ring, shared_dma + (i * BUFFER_SIZE), BUFFER_SIZE, NULL);
-
-        if (ret != 0) {
-            microkit_dbg_puts(microkit_name);
-            microkit_dbg_puts(": rx buffer population, unable to enqueue buffer\n");
-        }
-    }
-
-    ring_init(&tx_ring, (ring_buffer_t *)tx_avail, (ring_buffer_t *)tx_used, NULL, 0);
-
-    // Add buffers to the tx ring
-    for (int i = 0; i < NUM_BUFFERS - 1; i++) {
-        // Have to start at the memory region left of by the rx ring
-        int ret = enqueue_avail(&tx_ring, shared_dma + ((i + NUM_BUFFERS) * BUFFER_SIZE), BUFFER_SIZE, NULL);
-
-        if (ret != 0) {
-            microkit_dbg_puts(microkit_name);
-            microkit_dbg_puts(": tx buffer population, unable to enqueue buffer\n");
-        }
-    }
 
     serial_server_printf("Attempting to use the server printf!\n");
     serial_server_printf("-------HELLO THERE THIS IS SERVER PRINTF-------\n");
@@ -247,6 +223,7 @@ void init(void) {
 
 
 void notified(microkit_channel ch) {
+    // TODO: not sure why it ignores the first char input
     if (ch == SERVER_GETCHAR_CHANNEL) {
         global_test = getchar();
         serial_server_printf(&global_test);

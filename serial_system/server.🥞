@@ -1,3 +1,97 @@
 fun main() {
+    // memset @base[7] to @base[64] to 0 for global variables
+	var start = @base + 8*7;
+	var end = @base + 512;
+	while (start < end) {
+		stw start, 0;
+		start = start + 8;
+	}
+
+    // init the shared ring buffers
+	var rx_ring = 0;
+	var tx_ring = 0;
+	rx_ring = get_rx_ring();
+	tx_ring = get_tx_ring();
+
+	var rx_avail = 0;
+	var tx_avail = 0;
+	rx_avail = get_rx_avail();
+	tx_avail = get_tx_avail();
+
+	var rx_used = 0;
+	var tx_used = 0;
+	rx_used = get_rx_used();
+	tx_used = get_tx_used();
+
+	// Init the shared ring buffers
+	ring_init(rx_ring, rx_avail, rx_used);
+	ring_init(tx_ring, tx_avail, tx_used);
+
+    var shared_dma = 0;
+    shared_dma = get_shared_dma();
+
+	// We will also need to populate these rings with memory from the shared dma region
+	// Add buffers to the rx ring
+	var i = 0;
+    while (i < 511) {
+        var ret = 0;
+        ret = enqueue_avail(rx_ring, (shared_dma + (i * 1024)), 1024, 0);
+		if (ret != 0) {
+			// microkit_dbg_puts(microkit_name);
+			// microkit_dbg_puts(": rx buffer population, unable to enqueue buffer\n");
+			break;
+		}
+        i = i + 1;
+    }
+
+	// Add buffers to the tx ring
+    // TODO: not sure why len is different
+	i = 0;
+	while (i < 511) {
+	    var ret2 = 0;
+	    ret2 = enqueue_avail(tx_ring, (shared_dma + (i * 512)), 1024, 0);
+		if (ret2 != 0) {
+			// microkit_dbg_puts(microkit_name);
+			// microkit_dbg_puts(": tx buffer population, unable to enqueue buffer\n");
+			break;
+		}
+	    i = i + 1;
+	}
+
     return 0;
+}
+
+fun get_rx_avail() {
+	var rx_avail_addr = @base + 8;
+	return (lds {1} rx_avail_addr);
+}
+
+fun get_rx_used() {
+	var rx_used_addr = @base + 8*2;
+	return (lds {1} rx_used_addr);
+}
+
+fun get_tx_avail() {
+	var tx_avail_addr = @base + 8*3;
+	return (lds {1} tx_avail_addr);
+}
+
+fun get_tx_used() {
+	var tx_used_addr = @base + 8*4;
+	return (lds {1} tx_used_addr);
+}
+
+fun get_shared_dma() {
+	var vaddr_addr = @base + 8*5;
+	return (lds {1} vaddr_addr);
+}
+
+fun get_rx_ring() {
+	var ring_base = @base + 8*7;
+	return ring_base;
+}
+
+fun get_tx_ring() {
+	var ring_base = @base + 8*10;
+	return ring_base;
 }
