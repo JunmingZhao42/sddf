@@ -95,3 +95,83 @@ fun get_tx_ring() {
 	var ring_base = @base + 8*10;
 	return ring_base;
 }
+
+export fun handle_getchar() {
+	var char = 0;
+	char = getchar();
+	print_char(char);
+	// if char == CTRL^C or char == CTRL^D or char == '\n'
+	if (((char == 3) | (char == 4) | (char == 13)) != 0) {
+		// print newline
+		print_char(10);
+	}
+	return 0;
+}
+
+fun getchar() {
+	// Notify the driver that we want to get a character.
+	// In Patrick's design, this increments the chars_for_clients value.
+	@microkit_notify_getchar(0,0,0,0);
+
+	var rx_ring = 0;
+	rx_ring = get_rx_ring();
+	var buffer_ptr = @base + 512;
+	var buffer_len_ptr = @base + 520;
+	var cookie_ptr = @base + 528;
+
+	var ret = 1;
+	while (ret != 0) {
+		ret = dequeue_used(rx_ring, buffer_ptr, buffer_len_ptr, cookie_ptr);
+	}
+
+	var buffer = lds {1} buffer_ptr;
+	var buffer_len = lds {1} buffer_len_ptr;
+
+	// We are only getting one character at a time
+	var char = 0;
+	!ld8 char, buffer;
+
+	// Now that we are finished with the used buffer, we can add it back to the available ring
+	ret = enqueue_avail(rx_ring, buffer, buffer_len, 0);
+
+	// TODO: fault if ret != 0
+	return char;
+}
+
+fun print_char(1 char) {
+	var tx_ring = 0;
+	tx_ring = get_tx_ring();
+
+	var buffer_ptr = @base + 512;
+	var buffer_len_ptr = @base + 520;
+	var cookie_ptr = @base + 528;
+
+	var ret = 0;
+	ret = dequeue_avail(tx_ring, buffer_ptr, buffer_len_ptr, cookie_ptr);
+	if (ret != 0) {
+		return -1;
+	}
+
+	var buffer = lds {1} buffer_ptr;
+	// var buffer_len = lds {1} buffer_len_ptr;
+
+	!st8 char, buffer;
+
+	var tx_used_ring = (lds {1} tx_ring);
+	var is_empty = 0;
+	is_empty = ring_empty(tx_used_ring);
+
+	ret = enqueue_used(tx_ring, buffer, 2, cookie_ptr);
+	if (ret != 0) {
+		return -1;
+	}
+
+	if (is_empty) {
+		@microkit_notify_print(0,0,0,0);
+	}
+	return 0;
+}
+
+fun print_string(1 string_ptr) {
+	return 0;
+}

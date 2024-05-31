@@ -22,6 +22,7 @@ char global_test;
 static char cml_memory[1024*1024*2];
 
 extern void cml_main(void);
+extern void handle_getchar(void);
 extern void *cml_heap;
 extern void *cml_stack;
 extern void *cml_stackend;
@@ -41,6 +42,14 @@ void cml_err(int arg) {
 /* Need to come up with a replacement for this clear cache function. Might be worth testing just flushing the entire l1 cache, but might cause issues with returning to this file*/
 void cml_clear() {
     microkit_dbg_puts("Trying to clear cache\n");
+}
+
+void ffimicrokit_notify_getchar(unsigned char *c, long clen, unsigned char *a, long alen) {
+    microkit_notify(SERVER_GETCHAR_CHANNEL);
+}
+
+void ffimicrokit_notify_print(unsigned char *c, long clen, unsigned char *a, long alen) {
+    microkit_notify(SERVER_PRINT_CHANNEL);
 }
 
 void init_pancake_mem() {
@@ -225,11 +234,7 @@ void init(void) {
 void notified(microkit_channel ch) {
     // TODO: not sure why it ignores the first char input
     if (ch == SERVER_GETCHAR_CHANNEL) {
-        global_test = getchar();
-        serial_server_printf(&global_test);
-        if (global_test == '\03' || global_test == '\04' || global_test == '\r') {
-            serial_server_printf("\n");
-        }
+        handle_getchar();
     }
     return;
 }
