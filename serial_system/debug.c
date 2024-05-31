@@ -69,6 +69,13 @@ void ffiprint_char(unsigned char *c, long clen, unsigned char *a, long alen) {
     microkit_dbg_putc('\n');
 }
 
+void ffiprint_string(unsigned char *c, long clen, unsigned char *a, long alen) {
+    for (int i = 0; i < clen; i++) {
+        microkit_dbg_putc(c[i]);
+    }
+    microkit_dbg_putc('\n');
+}
+
 void ffiprint_address(unsigned char *c, long clen, unsigned char *a, long alen) {
     microkit_dbg_puts("FFI print address:\n");
     microkit_dbg_putc(((char) clen) + 48);

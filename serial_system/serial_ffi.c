@@ -13,14 +13,6 @@
 #include <string.h>
 #include <sel4/sel4.h>
 #include "serial.h"
-#include "debug.h"
-
-#ifdef EVAL
-#include <sys/time.h>
-#include <sys/stat.h>
-#include <sys/mman.h>
-#include <signal.h>
-#endif
 
 /* This flag is on by default. It catches CakeML's out-of-memory exit codes
  * and prints a helpful message to stderr.
@@ -28,7 +20,6 @@
  * */
 #define STDERR_MEM_EXHAUST
 #define CONFIG_ENABLE_BENCHMARKS
-/* clFFI (command line) */
 
 #define IRQ_CH 1
 #define TX_CH 8
@@ -44,10 +35,6 @@ uintptr_t rx_used;
 uintptr_t tx_avail;
 uintptr_t tx_used;
 uintptr_t shared_dma_vaddr;
-
-/* Pointers to shared_ringbuffers */
-ring_handle_t rx_ring;
-ring_handle_t tx_ring;
 
 static char cml_memory[1024*1024*2];
 
@@ -91,42 +78,6 @@ void ffiget_shared_mem_addr(unsigned char *c, long clen, unsigned char *a, long 
             break;
     }
 }
-
-#ifdef EVAL
-
-/* Signal handler for SIGINT */
-
-/* This is set to 1 when the runtime traps a SIGINT */
-volatile sig_atomic_t caught_sigint = 0;
-
-void do_sigint(int sig_num)
-{
-    signal(SIGINT, do_sigint);
-    caught_sigint = 1;
-}
-
-void ffipoll_sigint (unsigned char *c, long clen, unsigned char *a, long alen)
-{
-    if (alen < 1) {
-        return;
-    }
-    a[0] = (unsigned char) caught_sigint;
-    caught_sigint = 0;
-}
-
-void ffikernel_ffi (unsigned char *c, long clen, unsigned char *a, long alen) {
-    for (long i = 0; i < clen; i++) {
-        putc(c[i], stdout);
-    }
-}
-
-#else
-
-void ffipoll_sigint (unsigned char *c, long clen, unsigned char *a, long alen) { }
-
-void ffikernel_ffi (unsigned char *c, long clen, unsigned char *a, long alen) { }
-
-#endif
 
 void cml_exit(int arg) {
     microkit_dbg_puts("ERROR! We should not be getting here\n");

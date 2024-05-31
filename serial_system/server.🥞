@@ -58,6 +58,19 @@ fun main() {
 	    i = i + 1;
 	}
 
+	// print string test "HELLO!!!\n"
+	var test_string = @base + 1024;
+	st8 test_string, 72; // H
+	st8 test_string + 1, 69; // E
+	st8 test_string + 2, 76; // L
+	st8 test_string + 3, 76; // L
+	st8 test_string + 4, 79; // O
+	st8 test_string + 5, 33; // !
+	st8 test_string + 6, 33; // !
+	st8 test_string + 7, 33; // !
+	st8 test_string + 8, 10; // \n
+	print_string(test_string, 9);
+
     return 0;
 }
 
@@ -99,11 +112,15 @@ fun get_tx_ring() {
 export fun handle_getchar() {
 	var char = 0;
 	char = getchar();
-	print_char(char);
+
+	var temp_buff = @base + 576;
+	st8 temp_buff, char;
+	print_string(temp_buff, 1);
 	// if char == CTRL^C or char == CTRL^D or char == '\n'
 	if (((char == 3) | (char == 4) | (char == 13)) != 0) {
 		// print newline
-		print_char(10);
+		st8 temp_buff, 10;
+		print_string(temp_buff, 1);
 	}
 	return 0;
 }
@@ -133,12 +150,14 @@ fun getchar() {
 
 	// Now that we are finished with the used buffer, we can add it back to the available ring
 	ret = enqueue_avail(rx_ring, buffer, buffer_len, 0);
+	if (ret != 0) {
+		return -1;
+	}
 
-	// TODO: fault if ret != 0
 	return char;
 }
 
-fun print_char(1 char) {
+fun print_string(1 string_ptr, 1 string_len) {
 	var tx_ring = 0;
 	tx_ring = get_tx_ring();
 
@@ -146,6 +165,7 @@ fun print_char(1 char) {
 	var buffer_len_ptr = @base + 520;
 	var cookie_ptr = @base + 528;
 
+	// Dequeue a buffer from the available ring from the tx buffer
 	var ret = 0;
 	ret = dequeue_avail(tx_ring, buffer_ptr, buffer_len_ptr, cookie_ptr);
 	if (ret != 0) {
@@ -153,15 +173,15 @@ fun print_char(1 char) {
 	}
 
 	var buffer = lds {1} buffer_ptr;
-	// var buffer_len = lds {1} buffer_len_ptr;
 
-	!st8 char, buffer;
+	// copy over the string to the buffer
+	pnk_memcpy(buffer, string_ptr, string_len + 1);
 
 	var tx_used_ring = (lds {1} tx_ring);
 	var is_empty = 0;
 	is_empty = ring_empty(tx_used_ring);
 
-	ret = enqueue_used(tx_ring, buffer, 2, cookie_ptr);
+	ret = enqueue_used(tx_ring, buffer, (string_len + 1), cookie_ptr);
 	if (ret != 0) {
 		return -1;
 	}
@@ -169,9 +189,5 @@ fun print_char(1 char) {
 	if (is_empty) {
 		@microkit_notify_print(0,0,0,0);
 	}
-	return 0;
-}
-
-fun print_string(1 string_ptr) {
 	return 0;
 }

@@ -1,7 +1,5 @@
 #pragma once
 
-#include "shared_ringbuffer.h"
-
 #define BIT(nr) (1UL << (nr))
 
 #define UART_SR1_RRDY          BIT( 9)

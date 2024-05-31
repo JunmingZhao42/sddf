@@ -49,7 +49,7 @@ CFLAGS += -I$(BOARD_DIR)/include \
 	-I$(RINGBUFFERDIR)/include \
 
 SERIAL_OBJS := serial.o serial_ffi.o debug.o
-SERVER_OBJS := server.o server_ffi.o libsharedringbuffer/shared_ringbuffer.o debug.o
+SERVER_OBJS := server.o server_ffi.o debug.o
 all: directories $(IMAGE_FILE)
 
 SERIAL_PNK = serial.🥞 serial_helper.🥞 util.🥞 libsharedringbuffer/shared_ringbuffer.🥞 libsharedringbuffer/ringbuff_helper.🥞
