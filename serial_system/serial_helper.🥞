@@ -13,63 +13,63 @@ fun get_uart_base() {
 }
 
 fun get_rx_avail() {
-	var rx_avail_addr = @base + 8;
+	var rx_avail_addr = @base + WORD_SIZE;
 	return (lds {1} rx_avail_addr);
 }
 
 fun get_rx_used() {
-	var rx_used_addr = @base + 8*2;
+	var rx_used_addr = @base + WORD_SIZE*2;
 	return (lds {1} rx_used_addr);
 }
 
 fun get_tx_avail() {
-	var tx_avail_addr = @base + 8*3;
+	var tx_avail_addr = @base + WORD_SIZE*3;
 	return (lds {1} tx_avail_addr);
 }
 
 fun get_tx_used() {
-	var tx_used_addr = @base + 8*4;
+	var tx_used_addr = @base + WORD_SIZE*4;
 	return (lds {1} tx_used_addr);
 }
 
 fun get_shared_dma_vaddr() {
-	var vaddr_addr = @base + 8*5;
+	var vaddr_addr = @base + WORD_SIZE*5;
 	return (lds {1} vaddr_addr);
 }
 
 fun reset_num_chars() {
-	var num_addr = @base + 8*6;
+	var num_addr = @base + WORD_SIZE*6;
 	var num = 0;
 	stw num_addr, num;
 	return 0;
 }
 
 fun get_num_chars() {
-	var num_addr = @base + 8*6;
+	var num_addr = @base + WORD_SIZE*6;
 	return (lds {1} num_addr);
 }
 
 fun increment_num_chars() {
-	var num_addr = @base + 8*6;
-	var num = (lds {1} num_addr);
+	var num_addr = @base + WORD_SIZE*6;
+	var num = lds {1} num_addr;
 	stw num_addr, num + 1;
 	return 0;
 }
 
 fun decrement_num_chars() {
-	var num_addr = @base + 8*6;
-	var num = (lds {1} num_addr);
+	var num_addr = @base + WORD_SIZE*6;
+	var num = lds {1} num_addr;
 	stw num_addr, num - 1;
 	return 0;
 }
 
 fun get_rx_ring() {
-	var ring_base = @base + 8*7;
+	var ring_base = @base + WORD_SIZE*7;
 	return ring_base;
 }
 
 fun get_tx_ring() {
-	var ring_base = @base + 8*10;
+	var ring_base = @base + WORD_SIZE*10;
 	return ring_base;
 }
 
@@ -82,18 +82,16 @@ fun getchar() {
     var c_reg = -1;
     // loation of SR2, TODO: don't hardcode this
     var sr2 = 0;
-    !ld8 sr2, (regs + 152);
+    !ld8 sr2, (regs + SR2_OFFSET);
 
     // sr2 & UART_SR2_RXFIFO_RDR BIT(1)
     if (sr2 & 1) {
 		// TODO: ldw triggers segfault here
-		var reg_b = @base + 512;
+		var reg_b = FUNC_BASE;
 		@transfer_hw(regs, 1, reg_b, 1);
 		reg = lds {1} reg_b;
-		// reg & UART_URXD_READY_MASK BIT(15) 0x8000
-		if ((reg & 32768) != 0) {
-			// UART_BYTE_MASK 0xFF
-			c_reg = reg & 255;
+		if ((reg & UART_URXD_READY_MASK) != 0) {
+			c_reg = reg & UART_BYTE_MASK;
 		}
     }
 
@@ -112,9 +110,9 @@ fun internal_is_tx_fifo_busy() {
 
 	// loation of SR2, todo: don't hardcode this
 	var sr2 = 0;
-	!ldw sr2, (regs + 152);
+	!ldw sr2, (regs + SR2_OFFSET);
 
-	if ((sr2 & 16384) == 0) {
+	if ((sr2 & UART_SR2_TXFIFO_EMPTY) == 0) {
 		return 1;
 	} else {
 		return 0;
@@ -151,8 +149,8 @@ fun serial_dequeue_avail(1 rx_tx, 1 buffer_addr) {
 	}
 
 	// here we discarded the returned len and cookie
-	var len_ptr = @base + 512;
-	var cookie_ptr = @base + 520;
+	var len_ptr = FUNC_BASE;
+	var cookie_ptr = FUNC_BASE + WORD_SIZE;
 	var ret = 0;
 	ret = dequeue_avail(ring, buffer_addr, len_ptr, cookie_ptr);
 	if (ret == 0) {
@@ -163,7 +161,7 @@ fun serial_dequeue_avail(1 rx_tx, 1 buffer_addr) {
 }
 
 fun serial_enqueue_used(1 rx_tx, 1 input, 1 buffer_addr) {
-	var buffer = (lds {1} buffer_addr);
+	var buffer = lds {1} buffer_addr;
 	!st8 input, buffer;
 
 	var ring = 0;
@@ -187,21 +185,21 @@ fun serial_driver_dequeue_used(1 rx_tx, 1 copy_dst) {
 		ring = get_tx_ring();
 	}
 
-	var buffer_ptr = @base + 512;
-	var len_ptr = @base + 520;
-	var cookie_ptr = @base + 528;
+	var buffer_ptr = FUNC_BASE;
+	var len_ptr = FUNC_BASE + WORD_SIZE;
+	var cookie_ptr = FUNC_BASE + WORD_SIZE*2;
 	var ret = 0;
 	ret = dequeue_used(ring, buffer_ptr, len_ptr, cookie_ptr);
 
 	if (ret != 0) {
 		return 0;
 	} else {
-		var buffer_len = (lds {1} len_ptr);
-		if (buffer_len > 1024) {
+		var buffer_len = lds {1} len_ptr;
+		if (buffer_len > BUFFER_SIZE) {
 			return -1;
 		}
 		if (buffer_len > 0) {
-			var buffer = (lds {1} buffer_ptr);
+			var buffer = lds {1} buffer_ptr;
 			pnk_memcpy(copy_dst, buffer, buffer_len);
 		}
 		return buffer_len;

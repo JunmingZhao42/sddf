@@ -1,10 +1,10 @@
 fun main() {
     // memset @base[7] to @base[64] to 0 for global variables
-	var start = @base + 8*7;
-	var end = @base + 512;
+	var start = @base + WORD_SIZE*7;
+	var end = FUNC_BASE;
 	while (start < end) {
 		stw start, 0;
-		start = start + 8;
+		start = start + WORD_SIZE;
 	}
 
     // init the shared ring buffers
@@ -35,7 +35,7 @@ fun main() {
 	var i = 0;
     while (i < 511) {
         var ret = 0;
-        ret = enqueue_avail(rx_ring, (shared_dma + (i * 1024)), 1024, 0);
+        ret = enqueue_avail(rx_ring, (shared_dma + (i * BUFFER_SIZE)), BUFFER_SIZE, 0);
 		if (ret != 0) {
 			// microkit_dbg_puts(microkit_name);
 			// microkit_dbg_puts(": rx buffer population, unable to enqueue buffer\n");
@@ -49,7 +49,7 @@ fun main() {
 	i = 0;
 	while (i < 511) {
 	    var ret2 = 0;
-	    ret2 = enqueue_avail(tx_ring, (shared_dma + (i * 512)), 1024, 0);
+	    ret2 = enqueue_avail(tx_ring, (shared_dma + (i * NUM_BUFFERS)), BUFFER_SIZE, 0);
 		if (ret2 != 0) {
 			// microkit_dbg_puts(microkit_name);
 			// microkit_dbg_puts(": tx buffer population, unable to enqueue buffer\n");
@@ -58,7 +58,11 @@ fun main() {
 	    i = i + 1;
 	}
 
-	// print string test "HELLO!!!\n"
+	print_hello();
+    return 0;
+}
+
+fun print_hello() {
 	var test_string = @base + 1024;
 	st8 test_string, 72; // H
 	st8 test_string + 1, 69; // E
@@ -71,41 +75,41 @@ fun main() {
 	st8 test_string + 8, 10; // \n
 	print_string(test_string, 9);
 
-    return 0;
+	return 0;
 }
 
 fun get_rx_avail() {
-	var rx_avail_addr = @base + 8;
+	var rx_avail_addr = @base + WORD_SIZE;
 	return (lds {1} rx_avail_addr);
 }
 
 fun get_rx_used() {
-	var rx_used_addr = @base + 8*2;
+	var rx_used_addr = @base + WORD_SIZE*2;
 	return (lds {1} rx_used_addr);
 }
 
 fun get_tx_avail() {
-	var tx_avail_addr = @base + 8*3;
+	var tx_avail_addr = @base + WORD_SIZE*3;
 	return (lds {1} tx_avail_addr);
 }
 
 fun get_tx_used() {
-	var tx_used_addr = @base + 8*4;
+	var tx_used_addr = @base + WORD_SIZE*4;
 	return (lds {1} tx_used_addr);
 }
 
 fun get_shared_dma() {
-	var vaddr_addr = @base + 8*5;
+	var vaddr_addr = @base + WORD_SIZE*5;
 	return (lds {1} vaddr_addr);
 }
 
 fun get_rx_ring() {
-	var ring_base = @base + 8*7;
+	var ring_base = @base + WORD_SIZE*7;
 	return ring_base;
 }
 
 fun get_tx_ring() {
-	var ring_base = @base + 8*10;
+	var ring_base = @base + WORD_SIZE*10;
 	return ring_base;
 }
 
@@ -113,7 +117,7 @@ export fun handle_getchar() {
 	var char = 0;
 	char = getchar();
 
-	var temp_buff = @base + 576;
+	var temp_buff = FUNC_BASE + WORD_SIZE * 8;
 	st8 temp_buff, char;
 	print_string(temp_buff, 1);
 	// if char == CTRL^C or char == CTRL^D or char == '\n'
@@ -132,9 +136,9 @@ fun getchar() {
 
 	var rx_ring = 0;
 	rx_ring = get_rx_ring();
-	var buffer_ptr = @base + 512;
-	var buffer_len_ptr = @base + 520;
-	var cookie_ptr = @base + 528;
+	var buffer_ptr = FUNC_BASE;
+	var buffer_len_ptr = FUNC_BASE + WORD_SIZE;
+	var cookie_ptr = FUNC_BASE + WORD_SIZE*2;
 
 	var ret = 1;
 	while (ret != 0) {
@@ -161,9 +165,9 @@ fun print_string(1 string_ptr, 1 string_len) {
 	var tx_ring = 0;
 	tx_ring = get_tx_ring();
 
-	var buffer_ptr = @base + 512;
-	var buffer_len_ptr = @base + 520;
-	var cookie_ptr = @base + 528;
+	var buffer_ptr = FUNC_BASE;
+	var buffer_len_ptr = FUNC_BASE + WORD_SIZE;
+	var cookie_ptr = FUNC_BASE + WORD_SIZE*2;
 
 	// Dequeue a buffer from the available ring from the tx buffer
 	var ret = 0;
@@ -177,7 +181,7 @@ fun print_string(1 string_ptr, 1 string_len) {
 	// copy over the string to the buffer
 	pnk_memcpy(buffer, string_ptr, string_len + 1);
 
-	var tx_used_ring = (lds {1} tx_ring);
+	var tx_used_ring = lds {1} tx_ring;
 	var is_empty = 0;
 	is_empty = ring_empty(tx_used_ring);
 

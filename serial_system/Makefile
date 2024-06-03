@@ -48,24 +48,24 @@ CFLAGS += -I$(BOARD_DIR)/include \
 	-Iinclude	\
 	-I$(RINGBUFFERDIR)/include \
 
-SERIAL_OBJS := serial.o serial_ffi.o debug.o
-SERVER_OBJS := server.o server_ffi.o debug.o
+SERIAL_OBJS := serial.o serial_ffi.o libsharedringbuffer/ringbuff_ffi.o debug.o
+SERVER_OBJS := server.o server_ffi.o libsharedringbuffer/ringbuff_ffi.o debug.o
 all: directories $(IMAGE_FILE)
 
-SERIAL_PNK = serial.🥞 serial_helper.🥞 util.🥞 libsharedringbuffer/shared_ringbuffer.🥞 libsharedringbuffer/ringbuff_helper.🥞
-SERVER_PNK = server.🥞 util.🥞 libsharedringbuffer/shared_ringbuffer.🥞 libsharedringbuffer/ringbuff_helper.🥞
+SERIAL_PNK = util.🥞 serial.🥞 serial_helper.🥞 libsharedringbuffer/shared_ringbuffer.🥞 libsharedringbuffer/ringbuff_helper.🥞
+SERVER_PNK = util.🥞 server.🥞 libsharedringbuffer/shared_ringbuffer.🥞 libsharedringbuffer/ringbuff_helper.🥞
 
 $(BUILD_DIR)/serial.o: $(BUILD_DIR)/serial.S Makefile
 	$(CC) -c -mcpu=$(CPU) $< -o $@
 
 $(BUILD_DIR)/serial.S: $(SERIAL_PNK) Makefile
-	cat $(SERIAL_PNK) | $(CAKE_COMPILER) --target=arm8 --pancake --main_return=true > $@
+	cat $(SERIAL_PNK) | cpp -P | $(CAKE_COMPILER) --target=arm8 --pancake --main_return=true > $@
 
 $(BUILD_DIR)/server.o: $(BUILD_DIR)/server.S Makefile
 	$(CC) -c -mcpu=$(CPU) $< -o $@
 
 $(BUILD_DIR)/server.S: $(SERVER_PNK) Makefile
-	cat $(SERVER_PNK) | $(CAKE_COMPILER) --target=arm8 --pancake --main_return=true > $@
+	cat $(SERVER_PNK) | cpp -P | $(CAKE_COMPILER) --target=arm8 --pancake --main_return=true > $@
 
 $(BUILD_DIR)/%.o: %.c Makefile
 	$(CC) -c $(CFLAGS) $< -o $@

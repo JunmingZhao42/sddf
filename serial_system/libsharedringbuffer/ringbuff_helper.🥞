@@ -1,3 +1,8 @@
+/*
+ * Helper functions for accessing the ring buffer and buffer descriptors
+ * in the shared memory region.
+ * Might be replaced with more pancake feature in the future.
+ */
 
 /* Buffer descriptor
 typedef struct buff_desc {
@@ -20,23 +25,23 @@ fun buff_desc_encoded_addr_set(1 buff_desc, 1 buffer) {
 
 fun buff_desc_len(1 buff_desc) {
     var len = 0;
-    !ldw len, buff_desc + 8;
+    !ldw len, buff_desc + WORD_SIZE;
     return len;
 }
 
 fun buff_desc_len_set(1 buff_desc, 1 len) {
-    !stw len, buff_desc + 8;
+    !stw len, buff_desc + WORD_SIZE;
     return 0;
 }
 
 fun buff_desc_cookie(1 buff_desc) {
     var cookie = 0;
-    !ldw cookie, buff_desc + 16;
+    !ldw cookie, buff_desc + 2 * WORD_SIZE;
     return cookie;
 }
 
 fun buff_desc_cookie_set(1 buff_desc, 1 cookie) {
-    !stw cookie, buff_desc + 16;
+    !stw cookie, buff_desc + 2 * WORD_SIZE;
     return 0;
 }
 
@@ -61,20 +66,19 @@ fun ring_buffer_write_idx_set(1 ring, 1 write_idx) {
 
 fun ring_buffer_read_idx(1 ring) {
     var read_idx = 0;
-    !ldw read_idx, ring + 8;
+    !ldw read_idx, ring + WORD_SIZE;
     return read_idx;
 }
 
 fun ring_buffer_read_idx_set(1 ring, 1 read_idx) {
-    !stw read_idx, ring + 8;
+    !stw read_idx, ring + WORD_SIZE;
     return 0;
 }
 
-// Returns `&ring->buffers[idx % SIZE]`, assuming SIZE=512
+// Returns `&ring->buffers[idx % SIZE]`
 fun ring_buffer_buffers(1 ring, 1 idx) {
     var write_idx = 0;
-    write_idx = pnk_modulo512(idx);
-    // 24 is sizeof(buff_desc_t) which is element of `buffers` array
-    var offset = 16 + 24 * idx;
+    write_idx = pnk_modulo(idx, SIZE);
+    var offset = 2 * WORD_SIZE + 3 * WORD_SIZE * idx;
     return (ring + offset);
 }

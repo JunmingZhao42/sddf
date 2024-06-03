@@ -2,6 +2,10 @@
    Copyright 2022, UNSW
    SPDX-License-Identifier: CC-BY-SA-4.0
 -->
+Pancake libsharedringbuffer
+-------------------
+This repository added pancake implementation on top of the the original C  shared ring library.
+Note that FFI calls for `THREAD_MEMORY_RELEASE()` are still needed.
 
 libsharedringbuffer
 -------------------
@@ -40,7 +44,7 @@ available to be used by either component.
 Typically, 2 shared ring buffers are required, with separate structures
 required on the recieve path and transmit path. Thus there are 4 regions
 of shared memory required: 1 storing pointers to available RX buffers,
-1 storing pointers to used RX buffers, 1 storing pointers to TX 
+1 storing pointers to used RX buffers, 1 storing pointers to TX
 buffers, and another storing pointers to available TX buffers.
 
 On initialisation, both the producer and consumer should allocate their

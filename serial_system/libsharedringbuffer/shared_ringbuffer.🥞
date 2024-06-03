@@ -1,12 +1,22 @@
+#define SIZE 512
+
+/* A ring handle for enqueing/dequeuing into
+typedef struct ring_handle {
+    ring_buffer_t *used_ring;
+    ring_buffer_t *avail_ring;
+    // Function to be used to signal that work is queued in the used_ring
+    notify_fn notify;
+} ring_handle_t;
+*/
+
 fun ring_init(1 ring_addr, 1 avail, 1 used) {
     stw ring_addr, used;
-    stw ring_addr + 8, avail;
-    stw ring_addr + 16, 0;
+    stw ring_addr + WORD_SIZE, avail;
+    stw ring_addr + 2 * WORD_SIZE, 0;
     // TODO: init avail and used to be empty?
 	return 0;
 }
 
-// #define SIZE 512
 fun ring_empty(1 ring) {
     var write_idx = 0;
     var read_idx = 0;
@@ -14,7 +24,7 @@ fun ring_empty(1 ring) {
     read_idx = ring_buffer_read_idx(ring);
 
     var diff = 0;
-    diff = pnk_modulo512((write_idx - read_idx));
+    diff = pnk_modulo(write_idx - read_idx, SIZE);
     return (diff == 0);
 }
 
@@ -25,10 +35,9 @@ fun ring_full(1 ring) {
     read_idx = ring_buffer_read_idx(ring);
 
     var diff = 0;
-    diff = pnk_modulo512((write_idx - read_idx + 1));
+    diff = pnk_modulo(write_idx - read_idx + 1, SIZE);
     return (diff == 0);
 }
-
 
 fun ring_size(1 ring) {
     var write_idx = 0;
@@ -38,9 +47,8 @@ fun ring_size(1 ring) {
     return (write_idx - read_idx);
 }
 
-
 fun notify(1 ring_handle_addr) {
-    var notify = (lds {1} ring_handle_addr + 16);
+    var notify = lds {1} ring_handle_addr + 2 * WORD_SIZE;
     @funcall(notify, 1, 0, 0);
     return 0;
 }
@@ -99,28 +107,28 @@ fun dequeue(1 ring, 1 addr, 1 len_ptr, 1 cookie_ptr) {
 }
 
 fun enqueue_used(1 ring, 1 addr, 1 len, 1 cookie) {
-    var used_ring = (lds {1} ring);
+    var used_ring = lds {1} ring;
     var ret = 0;
     ret = enqueue(used_ring, addr, len, cookie);
     return ret;
 }
 
 fun enqueue_avail(1 ring, 1 addr, 1 len, 1 cookie) {
-    var avail_ring = (lds {1} ring + 8);
+    var avail_ring = lds {1} ring + WORD_SIZE;
     var ret = 0;
     ret = enqueue(avail_ring, addr, len, cookie);
     return ret;
 }
 
 fun dequeue_used(1 ring, 1 addr, 1 len_ptr, 1 cookie_ptr) {
-    var used_ring = (lds {1} ring);
+    var used_ring = lds {1} ring;
     var ret = 0;
     ret = dequeue(used_ring, addr, len_ptr, cookie_ptr);
     return ret;
 }
 
 fun dequeue_avail(1 ring, 1 addr, 1 len_ptr, 1 cookie_ptr) {
-    var avail_ring = (lds {1} ring + 8);
+    var avail_ring = lds {1} ring + WORD_SIZE;
     var ret = 0;
     ret = dequeue(avail_ring, addr, len_ptr, cookie_ptr);
     return ret;

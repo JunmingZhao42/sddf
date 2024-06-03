@@ -1,10 +1,10 @@
 fun main() {
 	// memset @base[7] to @base[64] to 0 for global variables
-	var start = @base + 8*7;
-	var end = @base + 512;
+	var start = @base + WORD_SIZE*7;
+	var end = FUNC_BASE;
 	while (start < end) {
 		stw start, 0;
-		start = start + 8;
+		start = start + WORD_SIZE;
 	}
 
 	// TODO: not sure why value under @base is touched
@@ -32,7 +32,7 @@ fun main() {
 }
 
 export fun handle_tx() {
-	var local_buff = @base + 544;
+	var local_buff = FUNC_BASE + WORD_SIZE * 4; //
 	var ret = 0;
 	// 1: dequeue_used tx
 	ret = serial_driver_dequeue_used(1, local_buff);
@@ -89,7 +89,7 @@ export fun handle_irq() {
 		return -1;
 	} else {
 		while true {
-			var buffer_addr = @base + 544;
+			var buffer_addr = FUNC_BASE + WORD_SIZE * 4;
 			var dequeue_ret = 0;
 			// 0: dequeue_avail rx
 			dequeue_ret = serial_dequeue_avail(0, buffer_addr);

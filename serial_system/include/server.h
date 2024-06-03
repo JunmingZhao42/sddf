@@ -1,5 +1,5 @@
 #pragma once
-#include "shared_ringbuffer.h"
+#include <microkit.h>
 
 #define SERVER_PRINT_CHANNEL 9
 #define SERVER_GETCHAR_CHANNEL 11

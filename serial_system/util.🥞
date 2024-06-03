@@ -1,3 +1,17 @@
+#define STATIC_AREA_SIZE 512
+#define FUNC_BASE @base + STATIC_AREA_SIZE
+
+#define BIT(nr) (1 << nr)
+
+#define UART_BYTE_MASK 255 // 0xFF
+#define UART_URXD_READY_MASK BIT(15) // BIT(15)
+#define SR2_OFFSET 152
+#define UART_SR2_TXFIFO_EMPTY BIT(14) // BIT(14)
+#define NUM_BUFFERS 512
+#define BUFFER_SIZE 1024
+
+#define WORD_SIZE 8
+
 /* Copy `len` bytes from src to dst */
 fun pnk_memcpy(1 dst, 1 src, 1 len) {
 	var i = 0;
@@ -10,24 +24,8 @@ fun pnk_memcpy(1 dst, 1 src, 1 len) {
 	return 0;
 }
 
-/* Returns a % b */
+/* Returns a % b, asuming b = x^n for some x and n */
 fun pnk_modulo(1 a, 1 b) {
-    if (b == 0) {
-        // make sure b != 0
-        return -1;
-    } else {
-        var c = a;
-        while (c >= b) {
-            c = c - b;
-        }
-        return c;
-    }
-}
-
-/* Temporary helper to efficiently mod 512,
-   Returns a % 512 */
-fun pnk_modulo512(1 a) {
-    var b = 0;
-    b = a & 511;
-    return b;
+    var mask = b - 1;
+    return a & mask;
 }
