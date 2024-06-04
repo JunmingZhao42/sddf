@@ -1,0 +1,151 @@
+import "./util.vpr"
+
+/* The reference manual used to acquire these values is:
+ *
+ * i.MX 8M Mini Applications Processor Reference Manual.
+ * Document number: IMX8MMRM.
+ * Rev. 3, 11/2020.
+ *
+ * The ethernet device is described in section 11.5.
+ */
+
+// Hardware ring descriptors simplified abstraction
+// RXD descriptor:
+// Section 11.5.6.13.1 Legacy receive buffer descriptor
+// b1: undefined
+// b2: undefined
+// b3: WRAP
+// b4: RXD_EMPTY
+
+method set_stat_WRAP(t: Ref)
+    requires tuple4_bool(t)
+    ensures tuple4_bool(t)
+    ensures unfolding tuple4_bool(t) in t.tuple4_b3
+{
+    unfold tuple4_bool(t)
+    t.tuple4_b3 := true
+    fold tuple4_bool(t)
+}
+
+method set_stat_RXD_EMPTY(t: Ref)
+    requires tuple4_bool(t)
+    ensures tuple4_bool(t)
+    ensures unfolding tuple4_bool(t) in t.tuple4_b4
+{
+    unfold tuple4_bool(t)
+    t.tuple4_b4 := true
+    fold tuple4_bool(t)
+}
+
+function get_stat_RXD_EMPTY(t: Ref): Bool
+    requires tuple4_bool(t)
+
+// TXD descriptor:
+// Sectioin 11.5.6.13.2 Legacy transmit buffer descriptor
+// b1: TXD_ADDCRC
+// b2: TXD_LAST
+// b3: WRAP
+// b4: TXD_READY
+
+method set_stat_TXD_ADDCRC(t: Ref)
+    requires tuple4_bool(t)
+    ensures tuple4_bool(t)
+    ensures unfolding tuple4_bool(t) in t.tuple4_b1
+{
+    unfold tuple4_bool(t)
+    t.tuple4_b1 := true
+    fold tuple4_bool(t)
+}
+
+method set_stat_TXD_LAST(t: Ref)
+    requires tuple4_bool(t)
+    ensures tuple4_bool(t)
+    ensures unfolding tuple4_bool(t) in t.tuple4_b2
+{
+    unfold tuple4_bool(t)
+    t.tuple4_b2 := true
+    fold tuple4_bool(t)
+}
+
+method set_stat_TXD_READY(t: Ref)
+    requires tuple4_bool(t)
+    ensures tuple4_bool(t)
+    ensures unfolding tuple4_bool(t) in t.tuple4_b4
+{
+    unfold tuple4_bool(t)
+    t.tuple4_b4 := true
+    fold tuple4_bool(t)
+}
+
+function get_stat_TXD_READY(t: Ref): Bool
+    requires tuple4_bool(t)
+
+// EIR register:
+// We only access the RXF, TXF and EBERR bits of this register
+// so we can model it as a 3-boolean tuple
+// Section 11.5.5.1 Interrupt Event Register (ENET_EIR)
+field EIR_RXF: Bool
+field EIR_TXF: Bool
+field EIR_EBERR: Bool
+
+// TDAR and RDAR registers:
+// Since the only interactions from driver to device of these registers
+// just setting them, we can model these registers as boolean values
+// Section 11.5.5.3 Receive Descriptor Active Register - Ring 0 (ENET_RDAR)
+field RDAR: Bool
+// Section 11.5.5.4 Transmit Descriptor Active Register - Ring 0 (ENET_TDAR)
+field TDAR: Bool
+
+predicate eth_registers(eth: Ref) {
+  acc(eth.EIR_RXF) && acc (eth.EIR_TXF) && acc (eth.EIR_EBERR) &&
+  acc(eth.TDAR) && acc(eth.RDAR)
+}
+
+// 
+/*
+clear IRQ_MASK of EIR register, which corresponds to 
+eir & IRQ_MASK according to the reference manual:
+> Writing a 1 to an EIR bit clears it; writing
+0 has no effect. This register is cleared upon hardware reset.
+*/
+method clear_IRQ(eth: Ref)
+  requires eth_registers(eth)
+  ensures eth_registers(eth)
+{
+  unfold eth_registers(eth)
+  eth.EIR_RXF := false
+  eth.EIR_TXF := false
+  eth.EIR_EBERR := false
+  fold eth_registers(eth)
+}
+
+function get_EIR_RXF(eth: Ref) : Bool
+  requires eth_registers(eth)
+
+function get_EIR_TXF(eth: Ref) : Bool
+  requires eth_registers(eth)
+
+function get_EIR_EBERR(eth: Ref) : Bool
+  requires eth_registers(eth)
+  ensures result == unfolding eth_registers(eth) in eth.EIR_EBERR
+{
+  unfolding eth_registers(eth) in eth.EIR_EBERR
+}
+
+method set_RDAR(eth: Ref)
+  requires eth_registers(eth)
+  ensures eth_registers(eth)
+{
+  unfold eth_registers(eth)
+  eth.RDAR := true
+  fold eth_registers(eth)
+}
+
+method set_TDAR(eth: Ref)
+  requires eth_registers(eth)
+  ensures eth_registers(eth)
+{
+  unfold eth_registers(eth)
+  eth.TDAR := true
+  fold eth_registers(eth)
+}

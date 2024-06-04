@@ -48,6 +48,11 @@ typedef struct {
     volatile struct descriptor *descr; /* buffer descripter array */
 } hw_ring_t;
 
+// viper assert:
+// hw_ring_t_valid(ring) ==>
+// forall i in [0, MAX_COUNT - 1] ::
+// ring.descr_mdata[i].io_or_offset == ring.descr[i].addr
+
 hw_ring_t rx; /* Rx NIC ring */
 hw_ring_t tx; /* Tx NIC ring */
 
@@ -83,10 +88,19 @@ static void update_ring_slot(hw_ring_t *ring, unsigned int idx, uintptr_t phys,
 }
 
 static void rx_provide(void)
+    // precondition: hw_ring_t_valid(rx)
+    // postcondition: hw_ring_t_valid(rx)
 {
     bool reprocess = true;
-    while (reprocess) {
-        while (!hw_ring_full(&rx, RX_COUNT) && !net_queue_empty_free(&rx_queue)) {
+    while (reprocess) 
+        // viper assert:
+        // invariant hw_ring_t_valid(rx)
+    {
+        while (!hw_ring_full(&rx, RX_COUNT) && !net_queue_empty_free(&rx_queue)) 
+            // viper assert:
+            // invariant hw_ring_t_valid(rx)
+            // decreases (RX_COUNT - hw_ring_size(rx))
+        {
             net_buff_desc_t buffer;
             int err = net_dequeue_free(&rx_queue, &buffer);
             assert(!err);
@@ -97,6 +111,8 @@ static void rx_provide(void)
             }
             rx.descr_mdata[rx.tail] = buffer;
             update_ring_slot(&rx, rx.tail, buffer.io_or_offset, 0, stat);
+            // viper assert:
+            // rx.hw_descr[rx.tail].addr == buffer.io_or_offset
             rx.tail = (rx.tail + 1) % RX_COUNT;
             eth->rdar = RDAR_RDAR;
         }
@@ -117,9 +133,15 @@ static void rx_provide(void)
 }
 
 static void rx_return(void)
+    // precondition: hw_ring_t_valid(rx)
+    // postcondition: hw_ring_t_valid(rx)
 {
     bool packets_transferred = false;
-    while (!hw_ring_empty(&rx, RX_COUNT)) {
+    while (!hw_ring_empty(&rx, RX_COUNT)) 
+        // viper assert:
+        // invariant hw_ring_t_valid(rx)
+        // decreases hw_ring_size(rx)
+    {
         /* If buffer slot is still empty, we have processed all packets the device has filled */
         volatile struct descriptor *d = &(rx.descr[rx.head]);
         if (d->stat & RXD_EMPTY) {
@@ -128,6 +150,9 @@ static void rx_return(void)
 
         net_buff_desc_t buffer = rx.descr_mdata[rx.head];
         buffer.len = d->len;
+        // viper assert: 
+        // buffer.len == rx.descr[rx.head].len
+        // buffer.io_or_offset == rx.descr[rx.head].addr
         int err = net_enqueue_active(&rx_queue, buffer);
         assert(!err);
 
@@ -142,10 +167,19 @@ static void rx_return(void)
 }
 
 static void tx_provide(void)
+    // precondition: hw_ring_t_valid(tx)
+    // postcondition: hw_ring_t_valid(tx)
 {
     bool reprocess = true;
-    while (reprocess) {
-        while (!(hw_ring_full(&tx, TX_COUNT)) && !net_queue_empty_active(&tx_queue)) {
+    while (reprocess) 
+        // viper assert:
+        // invariant hw_ring_t_valid(tx)
+    {
+        while (!(hw_ring_full(&tx, TX_COUNT)) && !net_queue_empty_active(&tx_queue)) 
+            // viper assert:
+            // invariant hw_ring_t_valid(tx)
+            // decreases (TX_COUNT - hw_ring_size(tx))
+        {
             net_buff_desc_t buffer;
             int err = net_dequeue_active(&tx_queue, &buffer);
             assert(!err);
@@ -156,7 +190,9 @@ static void tx_provide(void)
             }
             tx.descr_mdata[tx.tail] = buffer;
             update_ring_slot(&tx, tx.tail, buffer.io_or_offset, buffer.len, stat);
-
+            // viper assert:
+            // tx.hw_descr[tx.tail].addr == buffer.io_or_offset
+            // tx.hw_descr[tx.tail].len == buffer.len
             tx.tail = (tx.tail + 1) % TX_COUNT;
             eth->tdar = TDAR_TDAR;
         }
@@ -172,9 +208,15 @@ static void tx_provide(void)
 }
 
 static void tx_return(void)
+    // precondition: hw_ring_t_valid(tx)
+    // postcondition: hw_ring_t_valid(tx)
 {
     bool enqueued = false;
-    while (!hw_ring_empty(&tx, TX_COUNT)) {
+    while (!hw_ring_empty(&tx, TX_COUNT)) 
+        // viper assert:
+        // invariant hw_ring_t_valid(rx)
+        // decreases hw_ring_size(rx)
+    {
         /* Ensure that this buffer has been sent by the device */
         volatile struct descriptor *d = &(tx.descr[tx.head]);
         if (d->stat & TXD_READY) {
@@ -183,7 +225,8 @@ static void tx_return(void)
 
         net_buff_desc_t buffer = tx.descr_mdata[tx.head];
         buffer.len = 0;
-
+        // viper assert: 
+        // buffer.io_or_offset == tx.descr[tx.head].addr
         tx.head = (tx.head + 1) % TX_COUNT;
 
         int err = net_enqueue_free(&tx_queue, buffer);

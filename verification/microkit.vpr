@@ -1,0 +1,9 @@
+method microkit_notify(channel: Int)
+{
+    // Todo: implement
+}
+
+method microkit_deferred_irq_ack(channel: Int)
+{
+    // Todo: implement
+}

@@ -15,18 +15,18 @@
 
 typedef struct serial_queue {
     /* index to insert at */
-    uint32_t tail;
+    uint64_t tail;
     /* index to remove from */
-    uint32_t head;
+    uint64_t head;
     /* flag to indicate whether consumer requires signalling */
-    uint32_t consumer_signalled;
+    uint64_t consumer_signalled;
     /* flag to indicate whether producer requires signalling */
-    uint32_t producer_signalled;
+    uint64_t producer_signalled;
 } serial_queue_t;
 
 typedef struct serial_queue_handle {
     serial_queue_t *queue;
-    uint32_t size;
+    uint64_t size;
     char *data_region;
 } serial_queue_handle_t;
 
@@ -38,7 +38,7 @@ typedef struct serial_queue_handle {
  *
  * @return true indicates the queue is empty, false otherwise.
  */
-static inline int serial_queue_empty(serial_queue_handle_t *queue_handle, uint32_t local_head)
+static inline int serial_queue_empty(serial_queue_handle_t *queue_handle, uint64_t local_head)
 {
     return local_head == queue_handle->queue->tail;
 }
@@ -51,7 +51,7 @@ static inline int serial_queue_empty(serial_queue_handle_t *queue_handle, uint32
  *
  * @return true indicates the buffer is full, false otherwise.
  */
-static inline int serial_queue_full(serial_queue_handle_t *queue_handle, uint32_t local_tail)
+static inline int serial_queue_full(serial_queue_handle_t *queue_handle, uint64_t local_tail)
 {
     return local_tail - queue_handle->queue->head == queue_handle->size;
 }
@@ -66,7 +66,7 @@ static inline int serial_queue_full(serial_queue_handle_t *queue_handle, uint32_
  *
  * @return -1 when queue is empty, 0 on success.
  */
-static inline int serial_enqueue(serial_queue_handle_t *queue_handle, uint32_t *local_tail,
+static inline int serial_enqueue(serial_queue_handle_t *queue_handle, uint64_t *local_tail,
                                  char character)
 {
     if (serial_queue_full(queue_handle, *local_tail)) {
@@ -89,7 +89,7 @@ static inline int serial_enqueue(serial_queue_handle_t *queue_handle, uint32_t *
  *
  * @return -1 when queue is empty, 0 on success.
  */
-static inline int serial_dequeue(serial_queue_handle_t *queue_handle, uint32_t *local_head,
+static inline int serial_dequeue(serial_queue_handle_t *queue_handle, uint64_t *local_head,
                                  char *character)
 {
     if (serial_queue_empty(queue_handle, *local_head)) {
@@ -110,11 +110,11 @@ static inline int serial_dequeue(serial_queue_handle_t *queue_handle, uint32_t *
  * @param local_tail tail which points to the last character enqueued.
  */
 static inline void serial_update_visible_tail(serial_queue_handle_t *queue_handle,
-                                              uint32_t local_tail)
+                                              uint64_t local_tail)
 {
-    uint32_t head = queue_handle->queue->head;
-    uint32_t tail = queue_handle->queue->tail;
-    uint32_t max_tail = head + queue_handle->size;
+    uint64_t head = queue_handle->queue->head;
+    uint64_t tail = queue_handle->queue->tail;
+    uint64_t max_tail = head + queue_handle->size;
 
     /* Ensure updates to tail don't overwrite existing data */
     if (head <= tail) {
@@ -147,10 +147,10 @@ static inline void serial_update_visible_tail(serial_queue_handle_t *queue_handl
  * @param local_head head which points to the next character to dequeue.
  */
 static inline void serial_update_visible_head(serial_queue_handle_t *queue_handle,
-                                              uint32_t local_head)
+                                              uint64_t local_head)
 {
-    uint32_t head = queue_handle->queue->head;
-    uint32_t tail = queue_handle->queue->tail;
+    uint64_t head = queue_handle->queue->head;
+    uint64_t tail = queue_handle->queue->tail;
 
     /* Ensure updates to head don't corrupt queue size constraints */
     if (head <= tail) {
@@ -266,9 +266,9 @@ static inline void serial_transfer_all(serial_queue_handle_t *active_queue_handl
 
     while (serial_queue_length(active_queue_handle)) {
         /* Copy all contigous data */
-        uint32_t active = serial_queue_contiguous_length(active_queue_handle);
-        uint32_t free = serial_queue_contiguous_free(free_queue_handle);
-        uint32_t to_transfer = (active < free) ? active : free;
+        uint64_t active = serial_queue_contiguous_length(active_queue_handle);
+        uint64_t free = serial_queue_contiguous_free(free_queue_handle);
+        uint64_t to_transfer = (active < free) ? active : free;
 
         sddf_memcpy(free_queue_handle->data_region + (free_queue_handle->queue->tail % free_queue_handle->size),
                     active_queue_handle->data_region + (active_queue_handle->queue->head %
@@ -317,9 +317,9 @@ static inline void serial_transfer_all_with_colour(serial_queue_handle_t *active
 
     while (serial_queue_length(active_queue_handle)) {
         /* Copy all contigous data */
-        uint32_t active = serial_queue_contiguous_length(active_queue_handle);
-        uint32_t free = serial_queue_contiguous_free(free_queue_handle);
-        uint32_t to_transfer = (active < free) ? active : free;
+        uint64_t active = serial_queue_contiguous_length(active_queue_handle);
+        uint64_t free = serial_queue_contiguous_free(free_queue_handle);
+        uint64_t to_transfer = (active < free) ? active : free;
 
         sddf_memcpy(free_queue_handle->data_region + (free_queue_handle->queue->tail % free_queue_handle->size),
                     active_queue_handle->data_region + (active_queue_handle->queue->head %
@@ -353,7 +353,7 @@ static inline void serial_transfer_all_with_colour(serial_queue_handle_t *active
  * @param data_region address of the data region.
  */
 static inline void serial_queue_init(serial_queue_handle_t *queue_handle,
-                                     serial_queue_t *queue, uint32_t size, char *data_region)
+                                     serial_queue_t *queue, uint64_t size, char *data_region)
 {
     queue_handle->queue = queue;
     queue_handle->size = size;

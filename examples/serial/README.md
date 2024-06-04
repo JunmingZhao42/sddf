@@ -43,6 +43,59 @@ zig build -Dsdk=/path/to/sdk -Dboard=qemu_virt_aarch64 qemu
 
 The final bootable image will be in `zig-out/bin/loader.img`.
 
+## Pancake Note
+
+This is one example of a serial driver written in pancake. The currently supported board is `imx8mm_evk`.
+
+The relavent files are:
+```
+sddf
+├── drivers
+│   └── serial
+│       └── imx
+│           ├── uart.c
+|           ├── uart.🥞
+│           └── uart_helper.🥞
+├── examples
+│   └── serial
+|       ├── serial_server.c
+│       └── server.🥞
+├── include
+│   └── sddf
+│       └── serial
+│           ├── queue.🥞
+│           └── queue_helper.🥞
+├── serial
+│   └── components
+|       ├── virt_rx.c
+│       ├── virt_rx.🥞
+|       ├── virt_tx.c
+│       └── virt_tx.🥞
+└── util
+    ├── putchar_s.🥞
+    ├── util.🥞
+    └── pancake_ffi.c
+```
+
+### Build and run with pancake
+1. Download the latest (green master) cakeml compiler from [cakeml regression](https://cakeml.org/regression.cgi/):
+```
+wget https://cakeml.org/regression/artefacts/version-number/cake-x64-64.tar.gz
+tar -xzf
+cd cake-x64-64/
+make cake
+```
+2. Get the latest Microkit from https://github.com/seL4/microkit/releases
+3. Build driver image: 
+```
+make BUILD_DIR=$(pwd)/build                                 \
+     MICROKIT_SDK=/path/to/microkit-sdk                     \
+     MICROKIT_CONFIG=benchmark                              \
+     CAKE_COMPILER=/path/to/cake                            \
+     MICROKIT_BOARD=maaxboard
+```
+1. Run with `build/loader.img` on your bare metal (or via TS machine queue)
+
 ## Configuration
 
 In the serial example directory you will find the `include/serial_config/serial_config.h` file.
@@ -70,7 +123,7 @@ the device. Baud rate is always set explicitly instead of detected automatically
 initialisation completion. This is to support input beginning in the interfacing serial server.
 
 If the system file is changed, or the serial subsystem is included into another system, this config
-file will need to be edited or re-created to reflect the new system. Be sure to check that the 
+file will need to be edited or re-created to reflect the new system. Be sure to check that the
 `*_init\_sys` functions correctly initialise each protection domains data structures.
 
 ## Interfacing with Other Systems
@@ -105,7 +158,7 @@ serial_queue_handle_t serial_tx_queue_handle;
 ```
 
 If they require serial input then equivalent declarations must exist for the receive serial
-objects. Finally, during initialisation and prior to calling printf, they must initialise their 
+objects. Finally, during initialisation and prior to calling printf, they must initialise their
 serial queue(s) by calling `serial_cli_queue_init_sys` as well as `serial_putchar_init` which
 allows them to also use `sddf_putchar_unbuffered`.
 
