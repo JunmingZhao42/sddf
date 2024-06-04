@@ -1,0 +1,3 @@
+[submodule "serial_system/libsharedringbuffer"]
+	path = serial_system/libsharedringbuffer
+	url = git@github.com:JunmingZhao42/libsharedringbuffer.git
