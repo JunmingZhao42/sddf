@@ -13,7 +13,10 @@ fun ring_init(1 ring_addr, 1 avail, 1 used) {
     stw ring_addr, used;
     stw ring_addr + WORD_SIZE, avail;
     stw ring_addr + 2 * WORD_SIZE, 0;
-    // TODO: init avail and used to be empty?
+    ring_buffer_write_idx_set(used, 0);
+    ring_buffer_read_idx_set(used, 0);
+    ring_buffer_write_idx_set(avail, 0);
+    ring_buffer_read_idx_set(avail, 0);
 	return 0;
 }
 

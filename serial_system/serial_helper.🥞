@@ -80,7 +80,6 @@ fun getchar() {
 
     var reg = 0;
     var c_reg = -1;
-    // loation of SR2, TODO: don't hardcode this
     var sr2 = 0;
     !ld8 sr2, (regs + SR2_OFFSET);
 
@@ -108,7 +107,6 @@ fun internal_is_tx_fifo_busy() {
        might still be in progress.
     */
 
-	// loation of SR2, todo: don't hardcode this
 	var sr2 = 0;
 	!ldw sr2, (regs + SR2_OFFSET);
 
