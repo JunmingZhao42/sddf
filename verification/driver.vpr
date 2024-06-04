@@ -1,0 +1,446 @@
+import "./hw_ring.vpr"
+import "./device.vpr"
+import "./microkit.vpr"
+
+define IRQ_CH 0
+define TX_CH  1
+define RX_CH  2
+
+field driver_regs: Ref
+field virt_rx_queue: Ref
+field virt_tx_queue: Ref
+field driver_hw_ring_rx: Ref
+field driver_hw_ring_tx: Ref
+
+// This is analogous to pancake heap
+// Todo: flat heap -- represent `driver_state` as Seq[Ref] or Seq[Int]
+predicate driver_state(driver: Ref) {
+    acc(driver.virt_rx_queue) && net_queue_handle(driver.virt_rx_queue) &&
+    // Todo: factor out the queue size
+    (unfolding net_queue_handle(driver.virt_rx_queue) in driver.virt_rx_queue.queue_size == 512) &&
+    acc(driver.virt_tx_queue) && net_queue_handle(driver.virt_tx_queue) &&
+    (unfolding net_queue_handle(driver.virt_tx_queue) in driver.virt_tx_queue.queue_size == 512) &&
+    acc(driver.driver_hw_ring_rx) && hardware_ring(driver.driver_hw_ring_rx) &&
+    acc(driver.driver_hw_ring_tx) && hardware_ring(driver.driver_hw_ring_tx) &&
+    acc(driver.driver_regs) && eth_registers(driver.driver_regs)
+}
+
+// Todo: potentially can represent pancake heap in this way
+field pancake_heap: Seq[Ref]
+
+// Check pancake heap layout in ethernet.🥞
+predicate pancake_heap_permissions(driver: Ref) {
+    acc(driver.pancake_heap) && |driver.pancake_heap| == 2048 &&
+    acc(driver.pancake_heap[0].driver_regs) &&
+    // rx_queue
+    acc(driver.pancake_heap[1].free) && net_queue(driver.pancake_heap[1].free) &&
+    acc(driver.pancake_heap[2].active) && net_queue(driver.pancake_heap[2].active) &&
+    acc(driver.pancake_heap[3].queue_size) && driver.pancake_heap[3].queue_size == 512 &&
+    // tx_queue
+    acc(driver.pancake_heap[4].free) && net_queue(driver.pancake_heap[4].free) &&
+    acc(driver.pancake_heap[5].active) && net_queue(driver.pancake_heap[5].active) &&
+    acc(driver.pancake_heap[6].queue_size) && driver.pancake_heap[6].queue_size == 512 &&
+    // hw_ring_rx
+    acc(driver.pancake_heap[7].hw_tail) &&
+    acc(driver.pancake_heap[8].hw_head) &&
+    acc(driver.pancake_heap[9].hw_descr_mdata) && |driver.pancake_heap[9].hw_descr_mdata| == 512 &&
+    // Todo: maybe abstract this meta data array
+    sequence_injective(driver.pancake_heap[9].hw_descr_mdata) &&
+    (forall i: Int :: {driver.pancake_heap[9].hw_descr_mdata[i]}
+        i >= 0 && i < 512 ==> net_buff_desc(driver.pancake_heap[9].hw_descr_mdata[i])) &&
+    acc(driver.pancake_heap[10].hw_descr) && |driver.pancake_heap[10].hw_descr| == 512 &&
+    sequence_injective(driver.pancake_heap[10].hw_descr) &&
+    (forall i: Int :: {driver.pancake_heap[10].hw_descr[i]}
+        i >= 0 && i < 512 ==> hw_descriptor(driver.pancake_heap[10].hw_descr[i])) &&
+    // hw_ring_tx
+    acc(driver.pancake_heap[11].hw_tail) &&
+    acc(driver.pancake_heap[12].hw_head) &&
+    acc(driver.pancake_heap[13].hw_descr_mdata) && |driver.pancake_heap[13].hw_descr_mdata| == 512 &&
+    sequence_injective(driver.pancake_heap[13].hw_descr_mdata) &&
+    (forall i: Int :: {driver.pancake_heap[13].hw_descr_mdata[i]}
+        i >= 0 && i < 512 ==> net_buff_desc(driver.pancake_heap[13].hw_descr_mdata[i])) &&
+    acc(driver.pancake_heap[14].hw_descr) && |driver.pancake_heap[14].hw_descr| == 512 &&
+    sequence_injective(driver.pancake_heap[14].hw_descr) &&
+    (forall i: Int :: {driver.pancake_heap[14].hw_descr[i]}
+        i >= 0 && i < 512 ==> hw_descriptor(driver.pancake_heap[14].hw_descr[i]))
+}
+
+method rx_provide(driver: Ref)
+    requires driver_state(driver)
+    ensures driver_state(driver)
+{
+    var reprocess: Bool := true
+    while (reprocess)
+        invariant driver_state(driver)
+    {
+        while (true)
+            invariant driver_state(driver)
+            decreases unfolding driver_state(driver) in
+                unfolding hardware_ring(driver.driver_hw_ring_rx) in
+                hardware_ring_free_slots(driver.driver_hw_ring_rx)
+        {
+            unfold driver_state(driver)
+            unfold net_queue_handle(driver.virt_rx_queue)
+            unfold hardware_ring(driver.driver_hw_ring_rx)
+
+            if (hardware_ring_full(driver.driver_hw_ring_rx) ||
+                (unfolding net_queue(driver.virt_rx_queue.free) in net_queue_empty(driver.virt_rx_queue.free)))
+            {
+                fold net_queue_handle(driver.virt_rx_queue)
+                fold hardware_ring(driver.driver_hw_ring_rx)
+                fold driver_state(driver)
+                goto rx_provide_done
+            }
+
+            // create a stack variable
+            var buffer: Ref
+            inhale net_buff_desc(buffer)
+
+            net_dequeue(driver.virt_rx_queue.free, buffer)
+
+            // Todo: make sure that it's an acceptable way to "inhale"
+            // when creating stack variables
+            var stat_: Ref
+            inhale tuple4_bool(stat_)
+            set_stat_RXD_EMPTY(stat_)
+
+            // Todo: not sure what to reason about setting WRAP
+            if (mod_incr(driver.driver_hw_ring_rx.hw_tail, MAX_COUNT) == 0) {
+                set_stat_WRAP(stat_)
+            }
+
+            // update descr_mdata (private to pancake heap)
+            var t_idx: Int := driver.driver_hw_ring_rx.hw_tail
+            update_hw_descr_mdata(driver.driver_hw_ring_rx, t_idx, buffer)
+
+            // update descr (shared mem)
+            unfold net_buff_desc(buffer)
+            update_ring_slot(driver.driver_hw_ring_rx, t_idx, buffer.io_or_offset, 0, stat_)
+            // check that hardware ring slot is updated properly
+            assert unfolding acc(hw_descriptor(driver.driver_hw_ring_rx.hw_descr[t_idx]), 1/2) in 
+                driver.driver_hw_ring_rx.hw_descr[t_idx].descr_addr == buffer.io_or_offset
+            fold net_buff_desc(buffer)
+
+            // increment tail
+            driver.driver_hw_ring_rx.hw_tail := mod_incr(driver.driver_hw_ring_rx.hw_tail, MAX_COUNT)
+            set_RDAR(driver.driver_regs)
+
+            // by doing this we are making sure that hardware descriptor ring is same as the meta data ring
+            fold hardware_ring(driver.driver_hw_ring_rx)
+            fold net_queue_handle(driver.virt_rx_queue)
+            fold driver_state(driver)
+        }
+
+label rx_provide_done
+        unfold driver_state(driver)
+        unfold net_queue_handle(driver.virt_rx_queue)
+        unfold hardware_ring(driver.driver_hw_ring_rx)
+        unfold net_queue(driver.virt_rx_queue.free)
+
+        if (!hardware_ring_full(driver.driver_hw_ring_rx)) {
+            net_request_signal(driver.virt_rx_queue.free)
+        } else {
+            net_cancel_signal(driver.virt_rx_queue.free)
+        }
+
+        reprocess := false
+
+        // Todo: need to ask system people if the state of virt_rx_queue will change
+        if (!(hardware_ring_full(driver.driver_hw_ring_rx)) && 
+            !net_queue_empty(driver.virt_rx_queue.free)) 
+        {
+            net_cancel_signal(driver.virt_rx_queue.free)
+            reprocess := true
+        }
+
+        fold net_queue(driver.virt_rx_queue.free)
+        fold net_queue_handle(driver.virt_rx_queue)
+        fold hardware_ring(driver.driver_hw_ring_rx)
+        fold driver_state(driver)
+    }
+}
+
+method rx_return(driver: Ref)
+    requires driver_state(driver)
+    ensures driver_state(driver)
+{
+    var packets_transferred: Bool := true
+
+    while (true)
+        invariant driver_state(driver)
+        decreases unfolding driver_state(driver) in
+            unfolding hardware_ring(driver.driver_hw_ring_rx) in
+            hardware_ring_size(driver.driver_hw_ring_rx)
+    {
+        unfold driver_state(driver)
+        unfold hardware_ring(driver.driver_hw_ring_rx)
+        if (hardware_ring_empty(driver.driver_hw_ring_rx)) 
+        {
+            fold hardware_ring(driver.driver_hw_ring_rx)
+            fold driver_state(driver)
+            goto rx_return_done
+        }
+
+        var h_idx: Int := driver.driver_hw_ring_rx.hw_head
+        var d: Ref := driver.driver_hw_ring_rx.hw_descr[h_idx]
+
+        if (unfolding hw_descriptor(d) in get_stat_RXD_EMPTY(d.stat)) {
+            fold hardware_ring(driver.driver_hw_ring_rx)
+            fold driver_state(driver)
+            goto rx_return_done
+        }
+
+        var buffer: Ref := driver.driver_hw_ring_rx.hw_descr_mdata[h_idx];
+        unfold net_buff_desc(buffer)
+        buffer.buff_len := unfolding hw_descriptor(d) in d.descr_len
+        fold net_buff_desc(buffer)
+
+        // increment head
+        driver.driver_hw_ring_rx.hw_head := mod_incr(driver.driver_hw_ring_rx.hw_head, MAX_COUNT)
+
+        // Todo: understand this assumption (also from system people)
+        unfold net_queue_handle(driver.virt_rx_queue)
+        unfold net_queue(driver.virt_rx_queue.active)
+        inhale !net_queue_full(driver.virt_rx_queue.active)
+        fold net_queue(driver.virt_rx_queue.active)
+
+        // check if we enqueued the buffer properly
+        assert hw_descriptor_buffer_eq(driver.driver_hw_ring_rx.hw_descr[h_idx], buffer)
+        net_enqueue(driver.virt_rx_queue.active, buffer)
+
+        fold net_queue_handle(driver.virt_rx_queue)
+
+        packets_transferred := true
+        fold hardware_ring(driver.driver_hw_ring_rx)
+        fold driver_state(driver)
+    }
+
+label rx_return_done
+    unfold driver_state(driver)
+    unfold net_queue_handle(driver.virt_rx_queue)
+    unfold net_queue(driver.virt_rx_queue.active)
+    if (packets_transferred && net_require_signal(driver.virt_rx_queue.active)) {
+        net_cancel_signal(driver.virt_rx_queue.active)
+        microkit_notify(RX_CH)
+        // Todo: change virtuliser state by microkit_notify(*_CH)
+    }
+    fold net_queue(driver.virt_rx_queue.active)
+    fold net_queue_handle(driver.virt_rx_queue)
+    fold driver_state(driver)
+}
+
+
+method tx_provide(driver: Ref)
+    requires driver_state(driver)
+    ensures driver_state(driver)
+{
+    var reprocess: Bool := true
+    while (reprocess)
+        invariant driver_state(driver)
+    {
+        while (true)
+            invariant driver_state(driver)
+            decreases unfolding driver_state(driver) in
+                unfolding hardware_ring(driver.driver_hw_ring_tx) in
+                hardware_ring_free_slots(driver.driver_hw_ring_tx)
+        {
+            unfold driver_state(driver)
+            unfold net_queue_handle(driver.virt_tx_queue)
+            unfold hardware_ring(driver.driver_hw_ring_tx)
+
+            if (hardware_ring_full(driver.driver_hw_ring_tx) ||
+                (unfolding net_queue(driver.virt_tx_queue.active) in net_queue_empty(driver.virt_tx_queue.active)))
+            {
+                fold net_queue_handle(driver.virt_tx_queue)
+                fold hardware_ring(driver.driver_hw_ring_tx)
+                fold driver_state(driver)
+                goto tx_provide_done
+            }
+
+            var buffer: Ref
+            inhale net_buff_desc(buffer)
+
+            net_dequeue(driver.virt_tx_queue.active, buffer)
+
+            var stat_: Ref
+            inhale tuple4_bool(stat_)
+            set_stat_TXD_READY(stat_)
+            set_stat_TXD_ADDCRC(stat_)
+            set_stat_TXD_LAST(stat_)
+
+            if (mod_incr(driver.driver_hw_ring_tx.hw_tail, MAX_COUNT) == 0) {
+                set_stat_WRAP(stat_)
+            }
+
+            // update descr_mdata (private to pancake heap)
+            var t_idx: Int := driver.driver_hw_ring_tx.hw_tail
+            update_hw_descr_mdata(driver.driver_hw_ring_tx, t_idx, buffer)
+
+            // update descr (shared mem)
+            unfold net_buff_desc(buffer)
+            update_ring_slot(driver.driver_hw_ring_tx, t_idx, buffer.io_or_offset, buffer.buff_len, stat_)
+            fold net_buff_desc(buffer)
+
+            // check that hardware ring slot is updated properly
+            assert hw_descriptor_buffer_eq(driver.driver_hw_ring_tx.hw_descr[t_idx], buffer)
+
+            // increment tail
+            driver.driver_hw_ring_tx.hw_tail := mod_incr(driver.driver_hw_ring_tx.hw_tail, MAX_COUNT)
+            set_RDAR(driver.driver_regs)
+
+            // by doing this we are making sure that hardware descriptor ring is same as the meta data ring
+            fold hardware_ring(driver.driver_hw_ring_tx)
+            fold net_queue_handle(driver.virt_tx_queue)
+            fold driver_state(driver)
+        }
+
+label tx_provide_done
+        unfold driver_state(driver)
+        unfold net_queue_handle(driver.virt_tx_queue)
+        unfold hardware_ring(driver.driver_hw_ring_tx)
+        unfold net_queue(driver.virt_tx_queue.active)
+
+        // Todo: need to ask system people why this is not symmetric as rx_provide()
+        net_cancel_signal(driver.virt_tx_queue.active)
+        reprocess := false
+
+        if (!(hardware_ring_full(driver.driver_hw_ring_tx)) && 
+            !net_queue_empty(driver.virt_tx_queue.active)) 
+        {
+            net_cancel_signal(driver.virt_tx_queue.active)
+            reprocess := true
+        }
+
+        fold net_queue(driver.virt_tx_queue.active)
+        fold net_queue_handle(driver.virt_tx_queue)
+        fold hardware_ring(driver.driver_hw_ring_tx)
+        fold driver_state(driver)
+    }
+}
+
+method tx_return(driver: Ref)
+    requires driver_state(driver)
+    ensures driver_state(driver)
+{
+    var enqueued: Bool := true
+
+    while (true)
+        invariant driver_state(driver)
+        decreases unfolding driver_state(driver) in
+            unfolding hardware_ring(driver.driver_hw_ring_tx) in
+            hardware_ring_size(driver.driver_hw_ring_tx)
+    {
+        unfold driver_state(driver)
+        unfold hardware_ring(driver.driver_hw_ring_tx)
+        if (hardware_ring_empty(driver.driver_hw_ring_tx)) 
+        {
+            fold hardware_ring(driver.driver_hw_ring_tx)
+            fold driver_state(driver)
+            goto tx_return_done
+        }
+
+        var h_idx: Int := driver.driver_hw_ring_tx.hw_head
+        var d: Ref := driver.driver_hw_ring_tx.hw_descr[h_idx]
+
+        if (unfolding hw_descriptor(d) in get_stat_RXD_EMPTY(d.stat)) {
+            fold hardware_ring(driver.driver_hw_ring_tx)
+            fold driver_state(driver)
+            goto tx_return_done
+        }
+
+        var buffer: Ref := driver.driver_hw_ring_tx.hw_descr_mdata[h_idx];
+        unfold net_buff_desc(buffer)
+        buffer.buff_len := 0
+        fold net_buff_desc(buffer)
+
+        // increment head
+        driver.driver_hw_ring_tx.hw_head := mod_incr(driver.driver_hw_ring_tx.hw_head, MAX_COUNT)
+
+        // Todo: understand this assumption (also from system people)
+        unfold net_queue_handle(driver.virt_tx_queue)
+        unfold net_queue(driver.virt_tx_queue.free)
+        inhale !net_queue_full(driver.virt_tx_queue.free)
+        fold net_queue(driver.virt_tx_queue.free)
+
+        // check if we enqueued the buffer properly
+        assert unfolding hw_descriptor(driver.driver_hw_ring_tx.hw_descr[h_idx]) in
+            driver.driver_hw_ring_tx.hw_descr[h_idx].descr_addr == 
+            unfolding net_buff_desc(buffer) in buffer.io_or_offset
+        net_enqueue(driver.virt_tx_queue.free, buffer)
+
+        fold net_queue_handle(driver.virt_tx_queue)
+
+        enqueued := true
+        fold hardware_ring(driver.driver_hw_ring_tx)
+        fold driver_state(driver)
+    }
+
+label tx_return_done
+    unfold driver_state(driver)
+    unfold net_queue_handle(driver.virt_tx_queue)
+    unfold net_queue(driver.virt_tx_queue.free)
+    if (enqueued && net_require_signal(driver.virt_tx_queue.free)) {
+        net_cancel_signal(driver.virt_tx_queue.free)
+        microkit_notify(RX_CH)
+        // Todo: change virtuliser state by microkit_notify(*_CH)
+    }
+    fold net_queue(driver.virt_tx_queue.free)
+    fold net_queue_handle(driver.virt_tx_queue)
+    fold driver_state(driver)
+}
+
+method handle_irq(driver: Ref)
+    requires driver_state(driver)
+    ensures driver_state(driver)
+{
+    unfold driver_state(driver)
+    var eth: Ref := driver.driver_regs
+    var rxf: Bool := get_EIR_RXF(eth)
+    var txf: Bool := get_EIR_TXF(eth)
+    var eberr: Bool := get_EIR_EBERR(eth)
+    clear_IRQ(eth)
+    fold driver_state(driver)
+
+    // Todo: somehow let device update its state
+
+    while (rxf || txf || eberr)
+        invariant driver_state(driver)
+    {
+        // Todo
+        if (txf) {
+            tx_return(driver)
+        }
+        if (rxf) {
+            rx_return(driver)
+            rx_provide(driver)
+        }
+        if (eberr) {
+            // Todo: error
+        }
+
+        unfold driver_state(driver)
+        eth := driver.driver_regs
+        rxf := get_EIR_RXF(eth)
+        txf := get_EIR_TXF(eth)
+        eberr := get_EIR_EBERR(eth)
+        clear_IRQ(eth)
+        fold driver_state(driver)
+    }
+}
+
+method notified(driver: Ref, channel: Int)
+    requires driver_state(driver)
+    ensures driver_state(driver)
+{
+    if (channel == IRQ_CH) {
+        handle_irq(driver)
+        microkit_deferred_irq_ack(channel)
+    }
+    if (channel == RX_CH) {
+        rx_provide(driver)
+    }
+    if (channel == TX_CH) {
+        tx_provide(driver)
+    }
+    // Todo: else: error
+}

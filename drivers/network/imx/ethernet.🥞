@@ -1,0 +1,422 @@
+/* Pancake heap layout
+
+              pancake heap 1024*9 bytes
+             +--------------------------+
+      [0..7] | eth regs addr            |
+             +--------------------------+
+     [9..31] | rx_queue {               |
+             | free buffer ptr          +---->
+             | active buffer ptr        +----> shared mem with virt_rx
+             | queue size               |
+             |}                         |
+             +--------------------------+
+    [32..55] | tx queue {               |
+             | free buffer ptr          +---->
+             | active buffer ptr        +----> shared mem with virt_tx
+             | queue size               |
+             |}                         |
+             +--------------------------+
+  [56..4175] | hw_ring tx {             |
+             |  tail index              |
+             |  head index              |
+             |  buffers meta data       |
+             |  buffer descriptors ptr  +----> shared mem with device
+             | }                        |
+             +--------------------------+
+[4176..8295] | hw_ring rx {             |
+             |  tail index              |
+             |  head index              |
+             |  buffers meta data       |
+             |  buffer descriptors ptr  +----> shared mem with device
+             | }                        |
+             +--------------------------+
+ [8296..9216]| dynamic heap             |
+             |                          |
+             |                          |
+             |                          |
+             |                          |
+             |                          |
+             +--------------------------+
+ */
+
+#define IRQ_CH 0
+#define TX_CH  1
+#define RX_CH  2
+
+#define RX_COUNT 256
+#define TX_COUNT 256
+#define MAX_COUNT 256
+
+#define MAX_PACKET_SIZE     1536
+
+#define get_eth_regs(eth_regs)  \
+    var addrs = @base;          \
+    var eth_regs = lds 1 addrs; \
+
+#define get_rx_queue(rx_queue)          \
+    var rx_queue = @base + 3 * @biw;    \
+
+#define get_tx_queue(tx_queue)          \
+    var tx_queue = @base + 6 * @biw;    \
+
+////// helper functions for hw_ring_buffer
+/* HW ring buffer data type */
+/*
+typedef struct {
+    uint64_t tail; // index to insert at
+    uint64_t head; // index to remove from
+    net_buff_desc_t descr_mdata[MAX_COUNT]; // associated meta data array
+    volatile struct descriptor *descr; // buffer descripter array
+} hw_ring_t;
+*/
+
+#define HW_RING_SIZE (3 * @biw + MAX_COUNT * NET_BUFF_DESC_SIZE)
+
+#define hw_ring_get_tail(tail, hw_ring)     \
+    var tail = lds 1 hw_ring;               \
+
+#define hw_ring_set_tail(tail, hw_ring)     \
+    st hw_ring, tail;                       \
+
+#define hw_ring_get_head(head, hw_ring)     \
+    var head = lds 1 hw_ring + @biw;        \
+
+#define hw_ring_set_head(head, hw_ring)     \
+    st hw_ring + @biw, head;                \
+
+#define hw_ring_get_descr_mdata(desc, index, hw_ring)       \
+    var desc = hw_ring + 16 + index * NET_BUFF_DESC_SIZE;   \
+
+#define hw_ring_get_descr(descr, hw_ring)                               \
+    var addr = hw_ring + (2 * @biw) + MAX_COUNT * NET_BUFF_DESC_SIZE;   \
+    var descr = lds 1 addr;                                             \
+
+#define hw_ring_full(result, hw_ring, ring_size)    \
+    hw_ring_get_tail(tail, hw_ring)                 \
+    hw_ring_get_head(head, hw_ring)                 \
+    var value = tail - head + 1;                    \
+    pnk_modulo(mod, value, ring_size)               \
+    var result = (mod == 0);                        \
+
+#define hw_ring_empty(result, hw_ring, ring_size)   \
+    hw_ring_get_tail(tail, hw_ring)                 \
+    hw_ring_get_head(head, hw_ring)                 \
+    var value = tail - head;                        \
+    pnk_modulo(mod, value, ring_size)               \
+    var result = (mod == 0);                        \
+
+/*
+// HW ring descriptor (shared with device)
+struct descriptor {
+    uint16_t len;
+    uint16_t stat;
+    uint32_t addr;
+};
+*/
+#define DESCRIPTROR_SIZE  8
+
+///// ^^ helper function finished
+#define get_hw_ring_rx(hw_ring_rx)      \
+    var hw_ring_rx = @base + 9 * @biw;  \
+
+#define get_hw_ring_tx(hw_ring_tx)                      \
+    var hw_ring_tx = @base + 9 * @biw + HW_RING_SIZE;   \
+
+#define update_ring_slot(hw_ring, idx, phys, len, stat)     \
+    hw_ring_get_descr(descr, hw_ring)                       \
+    var dst_addr = descr + idx * DESCRIPTROR_SIZE;          \
+    var descriptor = (stat << 16) | len;                    \
+    !st32 dst_addr, descriptor;                             \
+    !st32 dst_addr + 4, phys;                               \
+
+fun main () {
+    rx_provide();
+    tx_provide();
+    return 0;
+}
+
+/*
+ * `rx_return()`: Transfer "active buffer" from device to `virt_rx`
+ * 1. check if `hw_ring_rx` is not empty; if not then exit
+ * 2. get a buffer from `head` slot of `hw_ring_rx`, make sure its status is non-empty; if not then exit
+ * 3. increment `hw_ring_rx` head, enqueue the buffer to `rx_active`
+ * 4. if `rx_active` requires signalling, cancel the signal and notify `virt_rx` via microkit
+ */
+fun rx_return() {
+    var packets_transferred = false;
+    get_hw_ring_rx(hw_ring_rx)
+    get_rx_queue(rx_queue)
+
+    while (true) {
+        hw_ring_empty(empty, hw_ring_rx, RX_COUNT)
+        if (empty) {
+            break;
+        }
+        // If buffer slot is still empty, we have processed all packets the device has filled
+        hw_ring_get_head(head, hw_ring_rx)
+        // volatile struct descriptor *d = &(hw_ring_rx->descr[hw_ring_rx->head]);
+        hw_ring_get_descr(descr, hw_ring_rx)
+        var dscr_addr = descr + head * DESCRIPTROR_SIZE; // this is an shared mem address
+        var descriptor = 0;
+        !ld32 descriptor, dscr_addr;
+
+        var stat = (descriptor >> 16) & MASK_16;
+        if (stat & RXD_EMPTY) {
+            break;
+        }
+
+        hw_ring_get_descr_mdata(buffer_addr, head, hw_ring_rx)
+        var len = descriptor & MASK_16;
+        st buffer_addr + @biw, len;
+
+        var buffer = lds {1,1} buffer_addr;
+        var 1 err = net_enqueue_active(rx_queue, buffer);
+        assert(!err)
+
+        packets_transferred = true;
+        var new_head = head + 1;
+        pnk_modulo(mod, new_head, RX_COUNT)
+        hw_ring_set_head(mod, hw_ring_rx)
+    }
+
+    net_require_signal_active(signal, rx_queue)
+    if (packets_transferred && signal) {
+        net_cancel_signal_active(rx_queue)
+        microkit_notify(RX_CH)
+    }
+    return 0;
+}
+
+/*
+ * `rx_provide()`: Transfer "free buffer" from `virt_rx` to device
+ * 1. check if `hw_ring_rx` is not full, and `rx_queue` is not empty;  if not then exit
+ * 2. dequeue a buffer from `rx_free`, update the buffer stat
+ * 3. update the tail slot of `hw_ring_rx` to this buffer, increment `hw_ring_rx` tail
+ * 4. set device `rdar` register
+ * 5. set `rx_free` as require signalling if `hw_ring_rx` is not full
+ * 6. recheck (1), process more if needed
+*/
+fun rx_provide() {
+    var reprocess = true;
+    get_hw_ring_rx(hw_ring_rx)
+    get_rx_queue(rx_queue)
+    get_eth_regs(eth)
+
+    while (reprocess) {
+        while (true) {
+            hw_ring_full(full, hw_ring_rx, RX_COUNT)
+            net_queue_empty_free(empty, rx_queue)
+            if (full || empty) {
+                break;
+            }
+
+            var buffer_addr = ETH_FUNC_BASE + 512;
+            var 1 err = net_dequeue_free(rx_queue, buffer_addr);
+            assert(!err)
+
+            var stat = RXD_EMPTY; // uint16_t
+            hw_ring_get_tail(hw_tail, hw_ring_rx)
+            if ((hw_tail + 1) == RX_COUNT) {
+                stat = (stat | WRAP) & MASK_16;
+            }
+
+            var buffer = lds {1,1} buffer_addr;
+            hw_ring_get_descr_mdata(hw_buff_addr, hw_tail, hw_ring_rx)
+            !stw hw_buff_addr, buffer.0;
+            !stw hw_buff_addr + @biw, buffer.1;
+
+            var io_or_offset = buffer.0;
+            update_ring_slot(hw_ring_rx, hw_tail, io_or_offset, 0, stat)
+
+            hw_tail = hw_tail + 1;
+            pnk_modulo(mod, hw_tail, RX_COUNT)
+            hw_ring_set_tail(mod, hw_ring_rx)
+
+            set_eth_rdar(RDAR_RDAR, eth)
+        }
+
+        // Only request a notification from virtualiser if HW ring not full
+        hw_ring_full(full, hw_ring_rx, RX_COUNT)
+        if (!full) {
+            net_request_signal_free(rx_queue)
+        } else {
+            net_cancel_signal_free(rx_queue)
+        }
+
+        reprocess = false;
+
+        net_queue_empty_free(empty, rx_queue)
+        hw_ring_full(full, hw_ring_rx, RX_COUNT)
+        if ((!empty) && (!full)) {
+            net_cancel_signal_free(rx_queue)
+            reprocess = true;
+        }
+    }
+    return 0;
+}
+
+/*
+ * `tx_provide()`: Transfer "active buffer" from `virt_tx` to device
+ * 1. check if `hw_ring_tx` is not full, and `tx_active` is not empty; if not then exit
+ * 2. dequeue a buffer from `tx_active`, update the buffer stat
+ * 3. update the tail slot of `hw_ring_tx` to this buffer, increment `hw_ring_tx` tail
+ * 4. set device `tdar` register
+ * 5. set `tx_active` as require signalling
+ * 6. recheck (1), process more if needed
+ */
+fun tx_provide() {
+    var reprocess = true;
+    get_hw_ring_tx(hw_ring_tx)
+    get_tx_queue(tx_queue)
+    get_eth_regs(eth)
+
+    while (reprocess) {
+        while (true) {
+            hw_ring_full(full, hw_ring_tx, TX_COUNT)
+            net_queue_empty_active(empty, tx_queue)
+            if (full || empty) {
+                break;
+            }
+
+            var buffer_addr = ETH_FUNC_BASE + 512;
+            var 1 err = net_dequeue_active(tx_queue, buffer_addr);
+            assert(!err)
+
+            var stat = TXD_READY | TXD_ADDCRC | TXD_LAST; // uint16_t
+            hw_ring_get_tail(hw_tail, hw_ring_tx)
+            if ((hw_tail + 1) == TX_COUNT) {
+                stat = (stat | WRAP) & MASK_16;
+            }
+            hw_ring_get_descr_mdata(buff, hw_tail, hw_ring_tx)
+            var buffer = lds {1,1} buffer_addr;
+            !stw buff, buffer.0;
+            !stw buff + @biw, buffer.1;
+
+            var io_or_offset = buffer.0;
+            var len = buffer.1;
+            update_ring_slot(hw_ring_tx, hw_tail, io_or_offset, len, stat)
+
+            hw_tail = hw_tail + 1;
+            pnk_modulo(mod, hw_tail, TX_COUNT)
+            hw_ring_set_tail(mod, hw_ring_tx)
+
+            set_eth_tdar(TDAR_TDAR, eth)
+        }
+
+        net_request_signal_active(tx_queue)
+        reprocess = false;
+
+        hw_ring_full(full, hw_ring_tx, TX_COUNT)
+        net_queue_empty_active(empty, tx_queue)
+        if ((!full) && (!empty)) {
+            net_cancel_signal_active(tx_queue)
+            reprocess = true;
+        }
+    }
+    return 0;
+}
+
+/*
+ * `tx_return()`: Transfer "free buffer" from device to `virt_tx`
+ * 1. check  if `hw_ring_tx` is not empty; if not then exit
+ * 2. get a buffer from `head` slot of `hw_ring_tx`, make sure it's been processed by the device; if not then exit
+ * 3. increment `hw_ring_tx` head, reset the buffer length, enqueue the buffer to `tx_free`
+ * 4. if `rx_free` requires signalling, cancel the signal and notify `virt_tx` via microkit
+ */
+fun tx_return() {
+    var enqueued = false;
+    get_tx_queue(tx_queue)
+    get_hw_ring_tx(hw_ring_tx)
+
+    while (true) {
+        hw_ring_empty(empty, hw_ring_tx, TX_COUNT)
+        if (empty) {
+            break;
+        }
+
+        // Ensure that this buffer has been sent by the device
+        hw_ring_get_head(hw_head, hw_ring_tx)
+        hw_ring_get_descr(descr, hw_ring_tx)
+        var dscr_addr = descr + hw_head * DESCRIPTROR_SIZE;
+        var descriptor = 0;
+        !ld32 descriptor, dscr_addr;
+
+        var stat = (descriptor >> 16) & MASK_16;
+        if (stat & TXD_READY) {
+            break;
+        }
+
+        hw_ring_get_descr_mdata(buff, hw_head, hw_ring_tx)
+        st buff + @biw, 0;
+
+        var new_head = hw_head + 1;
+        pnk_modulo(mod, new_head, TX_COUNT)
+        hw_ring_set_head(mod, hw_ring_tx)
+
+        var buffer = lds {1,1} buff;
+        var 1 err = net_enqueue_free(tx_queue, buffer);
+        assert(!err)
+        enqueued = true;
+    }
+
+
+    net_require_signal_free(signal, tx_queue)
+    if (enqueued && signal) {
+        net_cancel_signal_free(tx_queue)
+        microkit_notify(TX_CH)
+    }
+    return 0;
+}
+
+fun handle_irq() {
+    get_eth_regs(eth)
+    get_eth_eir(eir, eth)
+
+    var e = eir & IRQ_MASK;
+    set_eth_eir(e, eth)
+
+    while (e & IRQ_MASK) {
+        if (e & NETIRQ_TXF) {
+            tx_return();
+        }
+        if (e & NETIRQ_RXF) {
+            rx_return();
+            rx_provide();
+        }
+        if (e & NETIRQ_EBERR) {
+            skip;
+            // TODO: sddf_dprintf("ETH|ERROR: System bus/uDMA\n");
+        }
+        get_eth_eir(eir, eth)
+        e = eir & IRQ_MASK;
+        set_eth_eir(e, eth)
+    }
+    return 0;
+}
+
+export fun notified(1 channel) {
+    if (channel == IRQ_CH) {
+        handle_irq();
+        /*
+         * Delay calling into the kernel to ack the IRQ until the next loop
+         * in the microkit event handler loop.
+         */
+        microkit_deferred_irq_ack(channel)
+        return 0;
+    }
+
+    if (channel == RX_CH) {
+        rx_provide();
+        return 0;
+    }
+
+    if (channel == TX_CH) {
+        tx_provide();
+        return 0;
+    }
+
+    // TODO:
+    // sddf_dprintf("ETH|LOG: received notification on unexpected channel: %u\n", ch);
+    @print_int(0,0,0,channel);
+    return -1;
+}

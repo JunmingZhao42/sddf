@@ -1,0 +1,25 @@
+fun sddf_putchar_unbuffered(1 character) {
+    get_local_tail(local_tail)
+    get_tx_queue_handle(tx_queue_handle)
+
+    get_queue(queue, tx_queue_handle)
+
+    serial_queue_full(full, tx_queue_handle, local_tail)
+    if (full) {
+        return -1;
+    }
+
+    get_local_tail_addr(local_tail_addr)
+    serial_enqueue(tx_queue_handle, local_tail_addr, character);
+    !ldw local_tail, local_tail_addr;
+    handle_get_head(h, tx_queue_handle)
+
+    serial_update_visible_tail(tx_queue_handle, local_tail);
+    serial_require_producer_signal(signal, tx_queue_handle)
+    if (signal) {
+        serial_cancel_producer_signal(tx_queue_handle)
+        microkit_notify(TX_CH)
+    }
+    return 0;
+}
+

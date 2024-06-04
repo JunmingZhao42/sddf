@@ -1,0 +1,248 @@
+import "./queue.vpr"
+
+define MAX_COUNT 256
+
+/*
+struct descriptor {
+    uint16_t len;
+    uint16_t stat;
+    uint32_t addr;
+};
+*/
+field descr_len: Int
+field stat: Ref // tuple4_bool - workaround solution, since we only use 4 bits
+field descr_addr: Int
+
+predicate hw_descriptor(desc: Ref) {
+    acc(desc.descr_len) && acc(desc.descr_addr) &&
+    acc(desc.stat) && tuple4_bool(desc.stat)
+}
+
+function hw_descriptor_eq(desc1: Ref, desc2: Ref) : Bool
+    requires acc(hw_descriptor(desc1), 1/2) && acc(hw_descriptor(desc2), 1/2)
+    ensures result ==
+        unfolding acc(hw_descriptor(desc1), 1/2) in
+        unfolding acc(hw_descriptor(desc2), 1/2) in
+            desc1.descr_len == desc2.descr_len &&
+            desc1.stat == desc2.stat &&
+            desc1.descr_addr == desc2.descr_addr &&
+            tuple4_eq(desc1.stat, desc2.stat)
+{
+    unfolding acc(hw_descriptor(desc1), 1/2) in
+    unfolding acc(hw_descriptor(desc2), 1/2) in
+    desc1.descr_len == desc2.descr_len &&
+        desc1.stat == desc2.stat &&
+        desc1.descr_addr == desc2.descr_addr &&
+        tuple4_eq(desc1.stat, desc2.stat)
+}
+
+function hw_descriptor_buffer_eq(desc: Ref, buffer: Ref): Bool
+    requires acc(hw_descriptor(desc), 1/2) && acc(net_buff_desc(buffer), 1/2)
+    ensures result ==
+        unfolding acc(hw_descriptor(desc), 1/2) in
+        unfolding acc(net_buff_desc(buffer), 1/2) in
+            desc.descr_len == buffer.buff_len &&
+            desc.descr_addr == buffer.io_or_offset
+{
+    unfolding acc(hw_descriptor(desc), 1/2) in
+    unfolding acc(net_buff_desc(buffer), 1/2) in
+        desc.descr_len == buffer.buff_len &&
+        desc.descr_addr == buffer.io_or_offset
+}
+
+
+/*
+typedef struct {
+    unsigned int tail; // index to insert at
+    unsigned int head; // index to remove from
+    net_buff_desc_t descr_mdata[MAX_COUNT]; // associated meta data array
+    volatile struct descriptor *descr; // buffer descripter array
+} hw_ring_t;
+*/
+field hw_tail: Int
+field hw_head: Int
+field hw_descr_mdata: Seq[Ref]
+field hw_descr: Seq[Ref]
+
+predicate hardware_ring(hwr: Ref) {
+    acc(hwr.hw_tail) && 0 <= hwr.hw_tail && hwr.hw_tail < MAX_COUNT &&
+    acc(hwr.hw_head) && 0 <= hwr.hw_head && hwr.hw_head < MAX_COUNT &&
+    acc(hwr.hw_descr_mdata) && acc(hwr.hw_descr) &&
+    |hwr.hw_descr_mdata| == MAX_COUNT &&
+    |hwr.hw_descr| == MAX_COUNT &&
+    // make sure buffers are injective
+    sequence_injective(hwr.hw_descr_mdata) &&
+    sequence_injective(hwr.hw_descr) &&
+    (forall i: Int :: {hwr.hw_descr_mdata[i]}
+        0 <= i && i < MAX_COUNT ==> acc(net_buff_desc(hwr.hw_descr_mdata[i]))) &&
+    (forall i: Int :: {hwr.hw_descr[i]}
+        0 <= i && i < MAX_COUNT ==> acc(hw_descriptor(hwr.hw_descr[i]))) &&
+    (forall i: Int :: {hwr.hw_descr[i]}
+        0 <= i && i < MAX_COUNT ==> 
+        (unfolding acc(hw_descriptor(hwr.hw_descr[i]), 1/2) in hwr.hw_descr[i].descr_addr) == 
+        (unfolding acc(net_buff_desc(hwr.hw_descr_mdata[i]), 1/2) in hwr.hw_descr_mdata[i].io_or_offset))
+}
+
+function hardware_ring_eq(hwr1: Ref, hwr2: Ref): Bool
+    requires acc(hardware_ring(hwr1), 1/2) && acc(hardware_ring(hwr2), 1/2)
+    ensures result ==
+        unfolding acc(hardware_ring(hwr1), 1/2) in
+        unfolding acc(hardware_ring(hwr2), 1/2) in
+        hwr1.hw_tail == hwr2.hw_tail &&
+        hwr1.hw_head == hwr2.hw_head &&
+        hwr1.hw_descr_mdata == hwr2.hw_descr_mdata &&
+        (forall i: Int :: {hwr1.hw_descr_mdata[i]}
+            0 <= i && i < MAX_COUNT ==> net_buff_desc_eq(hwr1.hw_descr_mdata[i], hwr2.hw_descr_mdata[i])) &&
+        (forall i: Int :: {hwr1.hw_descr[i]}
+            0 <= i && i < MAX_COUNT ==> hw_descriptor_eq(hwr1.hw_descr[i], hwr2.hw_descr[i]))
+{
+    unfolding acc(hardware_ring(hwr1), 1/2) in
+    unfolding acc(hardware_ring(hwr2), 1/2) in
+    hwr1.hw_tail == hwr2.hw_tail &&
+    hwr1.hw_head == hwr2.hw_head &&
+    hwr1.hw_descr_mdata == hwr2.hw_descr_mdata &&
+    (forall i: Int :: {hwr1.hw_descr_mdata[i]}
+        0 <= i && i < MAX_COUNT ==> net_buff_desc_eq(hwr1.hw_descr_mdata[i], hwr2.hw_descr_mdata[i])) &&
+    (forall i: Int :: {hwr1.hw_descr[i]}
+        0 <= i && i < MAX_COUNT ==> hw_descriptor_eq(hwr1.hw_descr[i], hwr2.hw_descr[i]))
+}
+
+define hardware_ring_read_acc(hwr)
+    acc(hwr.hw_tail, 1/2) && acc(hwr.hw_head, 1/2) &&
+    hwr.hw_tail >= 0 && hwr.hw_tail < MAX_COUNT &&
+    hwr.hw_head >= 0 && hwr.hw_head < MAX_COUNT
+
+function hardware_ring_size(hwr: Ref) : Int
+    requires hardware_ring_read_acc(hwr)
+    ensures result == mod_sub(hwr.hw_tail, hwr.hw_head, MAX_COUNT)
+    ensures result >= 0 && result <= MAX_COUNT
+{
+    mod_sub(hwr.hw_tail, hwr.hw_head, MAX_COUNT)
+}
+
+function hardware_ring_free_slots(hwr: Ref) : Int
+    requires hardware_ring_read_acc(hwr)
+    ensures result == MAX_COUNT - hardware_ring_size(hwr)
+{
+    MAX_COUNT - hardware_ring_size(hwr)
+}
+
+// tail + 1 == head
+function hardware_ring_full(hwr: Ref) : Bool
+    requires hardware_ring_read_acc(hwr)
+    ensures result == mod_incr(hwr.hw_tail, MAX_COUNT) == hwr.hw_head
+    ensures result <==> hardware_ring_size(hwr) == MAX_COUNT - 1
+    ensures result <==> hardware_ring_free_slots(hwr) == 1
+    ensures !result <==> hardware_ring_size(hwr) < MAX_COUNT - 1
+    ensures !result <==> hardware_ring_free_slots(hwr) > 1
+{
+    mod_incr(hwr.hw_tail, MAX_COUNT) == hwr.hw_head
+}
+
+// tail == head
+function hardware_ring_empty(hwr: Ref) : Bool
+    requires hardware_ring_read_acc(hwr)
+    ensures result <==> hardware_ring_size(hwr) == 0
+    ensures result <==> hardware_ring_free_slots(hwr) == MAX_COUNT
+    ensures !result <==> hardware_ring_size(hwr) > 0
+    ensures !result <==> hardware_ring_free_slots(hwr) < MAX_COUNT
+{
+    hwr.hw_tail == hwr.hw_head
+}
+
+// Todo: use bit-vector to represent `stat_`
+method update_ring_slot(hwr: Ref, idx: Int, phys: Int, len: Int, stat_: Ref)
+    requires acc(hwr.hw_descr, 1/2)
+    requires 0 <= idx && idx < |hwr.hw_descr|
+    // Note: only give permission to the slot we are updating,
+    // so that we can make sure other slots are preserved
+    requires acc(hw_descriptor(hwr.hw_descr[idx]))
+    requires acc(tuple4_bool(stat_), 1/2)
+    ensures acc(hwr.hw_descr, 1/2)
+    ensures acc(tuple4_bool(stat_), 1/2)
+    ensures |hwr.hw_descr| == old(|hwr.hw_descr|)
+    ensures acc(hw_descriptor(hwr.hw_descr[idx]))
+    // check that the slot is updated correctly
+    ensures unfolding acc(hw_descriptor(hwr.hw_descr[idx])) in
+            hwr.hw_descr[idx].descr_len == len &&
+            tuple4_eq(hwr.hw_descr[idx].stat, stat_) &&
+            hwr.hw_descr[idx].descr_addr == phys
+    // every other slot in hwr.hw_descr[] is preserved
+    // ensures hw_descr_preserved_except(hwr, idx)
+{
+    unfold acc(hw_descriptor(hwr.hw_descr[idx]))
+
+    hwr.hw_descr[idx].descr_len := len
+    tuple4_update(hwr.hw_descr[idx].stat, stat_)
+    hwr.hw_descr[idx].descr_addr := phys
+
+    fold acc(hw_descriptor(hwr.hw_descr[idx]))
+}
+
+method update_hw_descr_mdata(hwr: Ref, idx: Int, buffer: Ref)
+    requires acc(hwr.hw_descr_mdata, 1/2)
+    requires 0 <= idx && idx < |hwr.hw_descr_mdata|
+    requires acc(net_buff_desc(buffer), 1/2)
+    // Note: same as `update_ring_slot`, only give permission to the slot we are updating
+    requires acc(net_buff_desc(hwr.hw_descr_mdata[idx]))
+    ensures acc(hwr.hw_descr_mdata, 1/2)
+    ensures acc(net_buff_desc(buffer), 1/2)
+    ensures |hwr.hw_descr_mdata| == old(|hwr.hw_descr_mdata|)
+    ensures acc(net_buff_desc(hwr.hw_descr_mdata[idx]))
+    ensures net_buff_desc_eq(hwr.hw_descr_mdata[idx], buffer)
+{
+    unfold acc(net_buff_desc(buffer), 1/2)
+    unfold acc(net_buff_desc(hwr.hw_descr_mdata[idx]))
+
+    hwr.hw_descr_mdata[idx].io_or_offset := buffer.io_or_offset
+    hwr.hw_descr_mdata[idx].buff_len := buffer.buff_len
+
+    fold acc(net_buff_desc(hwr.hw_descr_mdata[idx]))
+    fold acc(net_buff_desc(buffer), 1/2)
+}
+
+define hw_descr_preserved_except(hwr, index)
+    unfolding hardware_ring(hwr) in forall i: Int :: {hwr.hw_descr[i]}
+        0 <= i && i < MAX_COUNT && i != index ==>
+            hwr.hw_descr[i] == old(unfolding acc(hardware_ring(hwr), 1/2) in hwr.hw_descr[i]) &&
+            hw_descriptor_eq(hwr.hw_descr[i], old(unfolding acc(hardware_ring(hwr), 1/2) in hwr.hw_descr[i]))
+
+// Note: this is not actually used atm
+// Todo: this might help SMT to verify driver.vpr faster
+// but we need to make sure calling this function in pancake does not cause performance overhead
+method hardware_ring_enqueue(hwr: Ref, buffer: Ref, stat_: Ref)
+    requires acc(net_buff_desc(buffer), 1/2) && acc(tuple4_bool(stat_), 1/2)
+    requires hardware_ring(hwr) && unfolding hardware_ring(hwr) in !hardware_ring_full(hwr)
+    ensures acc(net_buff_desc(buffer), 1/2) && acc(tuple4_bool(stat_), 1/2)
+    ensures hardware_ring(hwr) && unfolding hardware_ring(hwr) in !hardware_ring_empty(hwr)
+    // |hwr.hw_descr| == old(|hwr.hw_descr|)
+    ensures unfolding hardware_ring(hwr) in |hwr.hw_descr| == old(unfolding hardware_ring(hwr) in |hwr.hw_descr|)
+    // old(hwr.hw_tail) + 1 == hwr.hw_tail
+    ensures unfolding hardware_ring(hwr) in mod_incr(old(unfolding hardware_ring(hwr) in hwr.hw_tail), MAX_COUNT) == hwr.hw_tail
+    // hwr.hw_tail - 1 == old(hwr.hw_tail)
+    ensures unfolding hardware_ring(hwr) in mod_decr(hwr.hw_tail, MAX_COUNT) == old(unfolding hardware_ring(hwr) in hwr.hw_tail)
+    // size == old(size) + 1
+    ensures unfolding hardware_ring(hwr) in hardware_ring_size(hwr) == old(unfolding hardware_ring(hwr) in hardware_ring_size(hwr)) + 1
+    // free_slots == old(free_slots) - 1
+    ensures unfolding hardware_ring(hwr) in hardware_ring_free_slots(hwr) == old(unfolding hardware_ring(hwr) in hardware_ring_free_slots(hwr)) - 1
+    // hwr.hw_descr[old(hwr.hw_tail)] == buffer
+    ensures unfolding hardware_ring(hwr) in hw_descriptor_buffer_eq(hwr.hw_descr[old(unfolding hardware_ring(hwr) in hwr.hw_tail)], buffer)
+    // every other slot in hwr.hw_descr[] is preserved
+    ensures hw_descr_preserved_except(hwr, old(unfolding hardware_ring(hwr) in hwr.hw_tail))
+{
+    unfold hardware_ring(hwr)
+
+    // update descr_mdata (private to pancake heap)
+    var t_idx: Int := hwr.hw_tail
+    update_hw_descr_mdata(hwr, t_idx, buffer)
+
+    // update descr (shared mem)
+    unfold acc(net_buff_desc(buffer), 1/2)
+    update_ring_slot(hwr, t_idx, buffer.io_or_offset, buffer.buff_len, stat_)
+    fold acc(net_buff_desc(buffer), 1/2)
+
+    // increment tail
+    hwr.hw_tail := mod_incr(hwr.hw_tail, MAX_COUNT)
+
+    fold hardware_ring(hwr)
+}

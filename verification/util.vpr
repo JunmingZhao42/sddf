@@ -1,0 +1,58 @@
+define sequence_injective(my_seq)
+    forall i: Int, j: Int :: {my_seq[i], my_seq[j]}
+        0 <= i && i < |my_seq| && 0 <= j && j < |my_seq| && i != j ==> my_seq[i] != my_seq[j]
+
+////////// Self-defined 4-boolean tuple
+field tuple4_b1: Bool
+field tuple4_b2: Bool
+field tuple4_b3: Bool
+field tuple4_b4: Bool
+
+predicate tuple4_bool(t: Ref) {
+    acc(t.tuple4_b1) && acc(t.tuple4_b2) && acc(t.tuple4_b3) && acc(t.tuple4_b4)
+}
+
+function tuple4_eq(t1: Ref, t2: Ref): Bool
+    requires acc(tuple4_bool(t1), 1/2) && acc(tuple4_bool(t2), 1/2)
+    ensures result ==
+        unfolding acc(tuple4_bool(t1), 1/2) in
+        unfolding acc(tuple4_bool(t2), 1/2) in
+        t1.tuple4_b1 == t2.tuple4_b1 &&
+        t1.tuple4_b2 == t2.tuple4_b2 &&
+        t1.tuple4_b3 == t2.tuple4_b3 &&
+        t1.tuple4_b4 == t2.tuple4_b4
+{
+    unfolding acc(tuple4_bool(t1), 1/2) in
+    unfolding acc(tuple4_bool(t2), 1/2) in
+        t1.tuple4_b1 == t2.tuple4_b1 &&
+        t1.tuple4_b2 == t2.tuple4_b2 &&
+        t1.tuple4_b3 == t2.tuple4_b3 &&
+        t1.tuple4_b4 == t2.tuple4_b4
+}
+
+method tuple4_update(t1: Ref, t2: Ref)
+    requires tuple4_bool(t1) && acc(tuple4_bool(t2), 1/2)
+    ensures tuple4_bool(t1) && acc(tuple4_bool(t2), 1/2)
+    ensures tuple4_eq(t1, t2)
+{
+    unfold tuple4_bool(t1)
+    unfold acc(tuple4_bool(t2), 1/2)
+
+    t1.tuple4_b1 := t2.tuple4_b1
+    t1.tuple4_b2 := t2.tuple4_b2
+    t1.tuple4_b3 := t2.tuple4_b3
+    t1.tuple4_b4 := t2.tuple4_b4
+
+    fold tuple4_bool(t1)
+    fold acc(tuple4_bool(t2), 1/2)
+}
+
+method set_tuple4_b4(t: Ref, b: Bool)
+    requires tuple4_bool(t)
+    ensures tuple4_bool(t)
+    ensures unfolding tuple4_bool(t) in t.tuple4_b4 == b
+{
+    unfold tuple4_bool(t)
+    t.tuple4_b4 := b
+    fold tuple4_bool(t)
+}

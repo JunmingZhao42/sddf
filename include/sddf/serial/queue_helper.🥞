@@ -1,0 +1,103 @@
+/**
+ * Helper macros for accessessing serial_queue., serial_queue_handle
+ * NOTE: unint32_t fields in the original queue.h are changed to uint64_t,
+ * as pancake currently doesn't support half-word access
+ */
+
+// TODO: current assumption is that serial_queue is stored in shared memory
+// between pancake and C. Move everything to cml_heap later.
+
+/*
+typedef struct serial_queue {
+    // index to insert at
+    uint64_t tail;
+    // index to remove from
+    uint64_t head;
+    // flag to indicate whether consumer requires signalling
+    uint64_t consumer_signalled;
+    // flag to indicate whether producer requires signalling
+    uint64_t producer_signalled;
+} serial_queue_t;
+*/
+#define get_tail(tail, queue)   \
+    var tail = 0;               \
+    !ldw tail, queue;           \
+
+#define set_tail(tail, queue)   \
+    !stw queue, tail;           \
+
+#define get_head(head, queue)   \
+    var head = 0;               \
+    !ldw head, queue + @biw;    \
+
+#define set_head(head, queue)   \
+    !stw queue + @biw, head;    \
+
+#define get_consumer_signalled(signalled, queue)    \
+    var signalled = 0;                              \
+    !ld8 signalled, queue + 2 * @biw;               \
+
+#define clear_consumer_signalled(queue) \
+    var signal = 0;                     \
+    !st8 queue + 2 * @biw, signal;      \
+
+#define set_consumer_signalled(queue)   \
+    var signal = 1;                     \
+    !st8 queue + 2 * @biw, signal;      \
+
+#define get_producer_signalled(signalled, queue)    \
+    var signalled = 0;                              \
+    !ld8 signalled, queue + 3 * @biw;               \
+
+#define clear_producer_signalled(queue) \
+    var signal = 0;                     \
+    !st8 queue + 3 * @biw, signal;      \
+
+#define set_producer_signalled(queue)   \
+    var signal = 1;                     \
+    !st8 queue + 3 * @biw, signal;      \
+
+/*
+typedef struct serial_queue_handle {
+    serial_queue_t *queue;
+    uint64_t size;
+    char *data_region;
+} serial_queue_handle_t;
+*/
+
+#define get_queue(queue, queue_handle)  \
+    var queue = 0;                      \
+    !ldw queue, queue_handle;           \
+
+#define set_queue(queue, queue_handle)  \
+    !stw queue, queue_handle;           \
+
+#define get_size(size, queue_handle)    \
+    var size = 0;                       \
+    !ldw size, queue_handle + @biw;     \
+
+#define set_size(size, queue_hanle) \
+    !stw queue_handle + @biw, size; \
+
+#define get_data_region(data_region, queue_handle)  \
+    var data_region = 0;                            \
+    !ldw data_region, queue_handle + 2 * @biw;      \
+
+#define set_data_region(data_region, queue_handle)  \
+    !stw queue_handle + 2 * @biw, data_region;      \
+
+#define handle_get_tail(tail, queue_handle) \
+    get_queue(queue, queue_handle)          \
+    get_tail(tail, queue)
+
+#define handle_set_tail(tail, queue_handle) \
+    get_queue(queue, queue_handle)          \
+    set_tail(tail, queue)
+
+#define handle_get_head(head, queue_handle) \
+    get_queue(queue, queue_handle)          \
+    get_head(head, queue)
+
+#define handle_set_head(head, queue_handle) \
+    get_queue(queue, queue_handle)          \
+    set_head(head, queue)

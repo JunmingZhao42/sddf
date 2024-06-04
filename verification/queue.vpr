@@ -1,0 +1,212 @@
+// Check sddf/include/sddf/network/queue.h for the original code
+
+import "./util.vpr"
+import "./mod_helper.vpr"
+// Change the above to "./mod_helper1.vpr" makes the verification process loops infinitely
+
+/*
+typedef struct net_buff_desc {
+    uint64_t io_or_offset;
+    // Todo: this should be uint16_t now
+    uint64_t buff_len;
+} net_buff_desc_t;
+*/
+field io_or_offset: Int
+field buff_len: Int
+
+predicate net_buff_desc(buff_desc: Ref) {
+    acc(buff_desc.io_or_offset) && acc(buff_desc.buff_len)
+}
+
+function net_buff_desc_eq(buff1: Ref, buff2: Ref): Bool
+    requires acc(net_buff_desc(buff1), 1/2) && acc(net_buff_desc(buff2), 1/2)
+    ensures result ==
+        unfolding acc(net_buff_desc(buff1), 1/2) in
+        unfolding acc(net_buff_desc(buff2), 1/2) in
+        buff1.io_or_offset == buff2.io_or_offset &&
+        buff1.buff_len == buff2.buff_len
+{
+    unfolding acc(net_buff_desc(buff1), 1/2) in
+    unfolding acc(net_buff_desc(buff2), 1/2) in
+    buff1.io_or_offset == buff2.io_or_offset &&
+    buff1.buff_len == buff2.buff_len
+}
+
+/*
+typedef struct net_queue {
+    // index to insert at
+    uint64_t tail;
+    // index to remove from
+    uint64_t head;
+    // flag to indicate whether consumer requires signalling
+    uint64_t consumer_signalled;
+    // buffer descripter array
+    net_buff_desc_t buffers[];
+} net_queue_t;
+*/
+field tail: Int
+field head: Int
+field consumer_signalled: Bool
+field buffers: Seq[Ref]
+
+predicate net_queue(queue: Ref) {
+    acc(queue.consumer_signalled) && acc(queue.buffers) &&
+    |queue.buffers| > 1 &&
+    acc(queue.tail) && queue.tail >= 0 && queue.tail < |queue.buffers| &&
+    acc(queue.head) && queue.head >= 0 && queue.head < |queue.buffers| &&
+    // make sure buffers are injective
+    sequence_injective(queue.buffers) &&
+    (forall i: Int :: {queue.buffers[i]}
+        0 <= i && i < |queue.buffers| ==> acc(net_buff_desc(queue.buffers[i])))
+}
+
+define net_queue_read_acc(queue)
+    acc(queue.tail, 1/2) && acc(queue.head, 1/2) && acc(queue.buffers, 1/2) &&
+    |queue.buffers| > 1 &&
+    queue.tail >= 0 && queue.tail < |queue.buffers| &&
+    queue.head >= 0 && queue.head < |queue.buffers|
+
+/*
+typedef struct net_queue_handle {
+    // available buffers
+    net_queue_t *free;
+    // filled buffers
+    net_queue_t *active;
+    // size of the queues
+    uint64_t size;
+} net_queue_handle_t;
+*/
+field free: Ref
+field active: Ref
+field queue_size: Int
+
+predicate net_queue_handle(handle: Ref) {
+    acc(handle.free) && acc(net_queue(handle.free)) &&
+    acc(handle.active) && acc(net_queue(handle.active)) &&
+    acc(handle.queue_size) &&
+    unfolding net_queue(handle.free) in handle.queue_size == |handle.free.buffers| &&
+    unfolding net_queue(handle.active) in handle.queue_size == |handle.active.buffers|
+}
+
+// Todo: not sure what to do with THREAD_MEMORY_RELEASE()
+method net_request_signal(queue: Ref)
+    requires acc(queue.consumer_signalled)
+    ensures acc(queue.consumer_signalled)
+{
+    queue.consumer_signalled := false
+}
+
+method net_cancel_signal(queue: Ref)
+    requires acc(queue.consumer_signalled)
+    ensures acc(queue.consumer_signalled)
+{
+    queue.consumer_signalled := true
+}
+
+function net_require_signal(queue: Ref): Bool
+    requires acc(queue.consumer_signalled, 1/2)
+    ensures result == !queue.consumer_signalled
+{
+    !queue.consumer_signalled
+}
+
+// Note: this is different from C code, not sure if C code is correct
+function net_queue_size(queue: Ref): Int
+    requires net_queue_read_acc(queue)
+    ensures result == mod_sub(queue.tail, queue.head, |queue.buffers|)
+    ensures result >= 0 && result < |queue.buffers|
+{
+    mod_sub(queue.tail, queue.head, |queue.buffers|)
+}
+
+function net_queue_empty(queue: Ref): Bool
+    requires net_queue_read_acc(queue)
+    ensures result == queue.tail == queue.head
+    ensures result ==> net_queue_size(queue) == 0
+{
+    queue.tail == queue.head
+}
+
+function net_queue_full(queue: Ref): Bool
+    requires net_queue_read_acc(queue)
+    ensures result == mod_incr(queue.tail, |queue.buffers|) == queue.head
+    ensures result ==> net_queue_size(queue) == |queue.buffers| - 1
+{
+    mod_incr(queue.tail, |queue.buffers|) == queue.head
+}
+
+define queue_preserved_except(queue, index)
+    unfolding net_queue(queue) in forall i: Int :: {queue.buffers[i]}
+        0 <= i && i < |queue.buffers| && i != index ==>
+            queue.buffers[i] == old(unfolding acc(net_queue(queue), 1/2) in queue.buffers[i]) &&
+            net_buff_desc_eq(queue.buffers[i], old(unfolding acc(net_queue(queue), 1/2) in queue.buffers[i]))
+
+method net_enqueue(queue: Ref, buffer: Ref)
+    requires net_queue(queue) && acc(net_buff_desc(buffer), 1/2)
+    requires unfolding net_queue(queue) in !net_queue_full(queue)
+    ensures net_queue(queue) && acc(net_buff_desc(buffer), 1/2)
+    ensures unfolding net_queue(queue) in !net_queue_empty(queue)
+    // |queue.buffers| == old(|queue.buffers|)
+    ensures unfolding net_queue(queue) in |queue.buffers| == old(unfolding net_queue(queue) in |queue.buffers|)
+    // old.tail + 1 == tail
+    ensures unfolding net_queue(queue) in mod_incr(old(unfolding net_queue(queue) in queue.tail), |queue.buffers|) == queue.tail
+    // tail - 1 == old.tail
+    ensures unfolding net_queue(queue) in mod_decr(queue.tail, |queue.buffers|) == old(unfolding net_queue(queue) in queue.tail)
+    // size == old.size + 1
+    ensures unfolding net_queue(queue) in net_queue_size(queue) == old(unfolding net_queue(queue) in net_queue_size(queue)) + 1
+    // queue.buffers[old.tail] == buffer
+    ensures unfolding net_queue(queue) in net_buff_desc_eq(buffer, queue.buffers[old(unfolding net_queue(queue) in queue.tail)])
+    // every other slot in queue.buffers[] is preserved
+    ensures queue_preserved_except(queue, old(unfolding net_queue(queue) in queue.tail))
+{
+    unfold acc(net_queue(queue))
+    unfold acc(net_buff_desc(buffer), 1/2)
+
+    // update slot
+    unfold net_buff_desc(queue.buffers[queue.tail])
+    queue.buffers[queue.tail].io_or_offset := buffer.io_or_offset
+    queue.buffers[queue.tail].buff_len := buffer.buff_len
+    fold net_buff_desc(queue.buffers[queue.tail])
+
+    // update tail
+    // Todo: THREAD_MEMORY_RELEASE()
+    queue.tail := mod_incr(queue.tail, |queue.buffers|)
+
+    fold acc(net_buff_desc(buffer), 1/2)
+    fold net_queue(queue)
+}
+
+method net_dequeue(queue: Ref, ret_buffer: Ref)
+    requires net_queue(queue) && net_buff_desc(ret_buffer)
+    requires unfolding net_queue(queue) in !net_queue_empty(queue)
+    ensures net_queue(queue) && net_buff_desc(ret_buffer)
+    ensures unfolding net_queue(queue) in !net_queue_full(queue)
+    // |queue.buffers| == old(|queue.buffers|)
+    ensures unfolding net_queue(queue) in |queue.buffers| == old(unfolding net_queue(queue) in |queue.buffers|)
+    // old.head + 1 == head
+    ensures unfolding net_queue(queue) in mod_incr(old(unfolding net_queue(queue) in queue.head), |queue.buffers|) == queue.head
+    // head - 1 == old.head
+    ensures unfolding net_queue(queue) in mod_decr(queue.head, |queue.buffers|) == old(unfolding net_queue(queue) in queue.head)
+    // size == old.size - 1
+    ensures unfolding net_queue(queue) in net_queue_size(queue) == old(unfolding net_queue(queue) in net_queue_size(queue)) - 1
+    // ret_buffer == queue.buffers[old.head]
+    ensures unfolding net_queue(queue) in net_buff_desc_eq(ret_buffer, queue.buffers[old(unfolding net_queue(queue) in queue.head)])
+    // every other slot in queue.buffers[] is preserved
+    ensures queue_preserved_except(queue, old(unfolding net_queue(queue) in queue.head))
+{
+    unfold net_queue(queue)
+    unfold net_buff_desc(ret_buffer)
+
+    // get slot
+    unfold net_buff_desc(queue.buffers[queue.head])
+    ret_buffer.io_or_offset := queue.buffers[queue.head].io_or_offset
+    ret_buffer.buff_len := queue.buffers[queue.head].buff_len
+    fold net_buff_desc(queue.buffers[queue.head])
+
+    // update head
+    // Todo: THREAD_MEMORY_RELEASE()
+    queue.head := mod_incr(queue.head, |queue.buffers|)
+
+    fold net_buff_desc(ret_buffer)
+    fold net_queue(queue)
+}
