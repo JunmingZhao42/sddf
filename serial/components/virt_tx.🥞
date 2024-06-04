@@ -1,0 +1,267 @@
+// TODO: Change this to take makefile argument
+#define SERIAL_NUM_CLIENTS 2
+
+#define DRIVER_CH 0
+#define CLIENT_OFFSET 1
+
+#define MAX_COLOURS 256
+#define MAX_COLOURS_LEN 3
+
+#define COLOUR_START_START_LEN 7
+
+#define COLOUR_START_END_LEN 1
+
+#define get_tx_queue_drv(queue_drv)     \
+	var addr = @base + WORD_SIZE * 5;   \
+	var queue_drv = lds {1} addr; 		\
+
+#define get_tx_queue_cli0(queue_cli0)   \
+	var addr = @base + WORD_SIZE * 6;   \
+	var queue_cli0 = lds {1} addr; 		\
+
+#define get_tx_data_drv(data_drv)       \
+	var addr = @base + WORD_SIZE * 7;   \
+	var data_drv = lds {1} addr; 		\
+
+#define get_tx_data_cli0(data_cli0)     \
+	var addr = @base + WORD_SIZE * 8;   \
+	var data_cli0 = lds {1} addr; 		\
+
+#define get_clients_colours(colours)    \
+	var addr = @base + WORD_SIZE * 9;   \
+	var colours = lds {1} addr; 		\
+
+#define get_tx_queue_handle_drv(queue_handle)   \
+    var queue_handle = @base + WORD_SIZE * 10;  \
+
+#define get_tx_queue_handle_cli(queue_handle)   \
+    var queue_handle = @base + WORD_SIZE * 13;  \
+
+#define get_tx_queue_handle_cli_i(queue_handle, i)                      \
+    var queue_handle = @base + WORD_SIZE * (13 + i*QUEUE_HANDLE_SIZE);  \
+
+/*
+typedef struct tx_pending {
+    uint64_t queue[SERIAL_NUM_CLIENTS];
+    uint64_t clients_pending[SERIAL_NUM_CLIENTS];
+    uint64_t head;
+    uint64_t tail;
+} tx_pending_t;
+*/
+#define get_tx_pending(tx_pending)                                                          \
+    var tx_pending = @base + WORD_SIZE * (13 + SERIAL_NUM_CLIENTS * QUEUE_HANDLE_SIZE);     \
+
+#define tx_pending_queue(queue, tx_pending) \
+    var queue = tx_pending;                 \
+
+#define tx_pending_queue_get_i(queue, i, tx_pending)    \
+    var addr = tx_pending + (i * WORD_SIZE);            \
+    var queue = lds {1} addr;                           \
+
+#define tx_pending_queue_set_i(queue, i, tx_pending)    \
+    var addr = tx_pending + (i * WORD_SIZE);            \
+    stw queue, addr;                                    \
+
+#define tx_pending_clients_pending(clients_pending, tx_pending)             \
+    var clients_pending = tx_pending + (SERIAL_NUM_CLIENTS * WORD_SIZE);    \
+
+#define tx_pending_clients_pending_get_i(clients_pending, i, tx_pending)            \
+    var addr = tx_pending + (SERIAL_NUM_CLIENTS * WORD_SIZE) + (i * WORD_SIZE);     \
+    var clients_pending = lds {1} addr;                                             \
+
+#define tx_pending_clients_pending_set_i(clients_pending, i, tx_pending)            \
+    var addr = tx_pending + (SERIAL_NUM_CLIENTS * WORD_SIZE) + (i * WORD_SIZE);     \
+    stw clients_pending, addr;                                                      \
+
+#define tx_pending_get_head(head, tx_pending)                       \
+    var addr = tx_pending + (SERIAL_NUM_CLIENTS * WORD_SIZE * 2);   \
+    var head = lds {1} addr;                                        \
+
+#define tx_pending_set_head(head, tx_pending)                       \
+    var addr = tx_pending + (SERIAL_NUM_CLIENTS * WORD_SIZE * 2);   \
+    stw head, addr;                                                 \
+
+#define tx_pending_get_tail(tail, tx_pending)                           \
+    var addr = tx_pending + (SERIAL_NUM_CLIENTS * WORD_SIZE * 2) + 1;   \
+    var tail = lds {1} addr;                                            \
+
+#define tx_pending_set_tail(tail, tx_pending)                           \
+    var addr = tx_pending + (SERIAL_NUM_CLIENTS * WORD_SIZE * 2) + 1;   \
+    stw tail, addr;                                                     \
+
+
+fun main() {
+    return 0;
+}
+
+fun process_tx_queue(1 client) {
+    get_tx_queue_handle_cli_i(queue_handle, client)
+    handle_get_head(head, queue_handle)
+    serial_queue_empty(empty, queue_handle, head)
+    if (empty) {
+        serial_request_consumer_signal(queue_handle)
+        return false;
+    }
+
+    var length = 0;
+    length = serial_queue_length(queue_handle);
+    // TODO: add #if SERIAL_WITH_COLOUR
+    // length = length + COLOUR_START_START_LEN + MAX_COLOURS_LEN + COLOUR_START_END_LEN;
+
+    // Not enough space to transmit string to virtualiser. Continue later
+    get_tx_queue_handle_drv(queue_handle_drv)
+    var free = 0;
+    free = serial_queue_free(queue_handle_drv);
+
+    if (length > free) {
+        tx_pending_push(client);
+
+        // Request signal from the driver when data has been consumed
+        serial_request_consumer_signal(queue_handle_drv)
+
+        // Cancel further signals from this client
+        serial_cancel_producer_signal(queue_handle)
+
+        return false;
+    }
+
+    // TODO: add #if SERIAL_WITH_COLOUR
+    serial_transfer_all(queue_handle, queue_handle_drv);
+    serial_request_producer_signal(queue_handle)
+    return true;
+}
+
+fun tx_pending_length() {
+    get_tx_pending(tx_pending)
+    tx_pending_get_head(head, tx_pending)
+    tx_pending_get_tail(tail, tx_pending)
+    return (tail - head);
+}
+
+fun tx_pending_push(1 client) {
+    get_tx_pending(tx_pending)
+    tx_pending_clients_pending_get_i(clients_pending, client, tx_pending)
+    // Ensure client is not already pending
+    if (!clients_pending) {
+        return 0;
+    }
+    var pending_length = 0;
+    pending_length = tx_pending_length();
+    // Ensure the pending queue is not already full
+    assert(pending_length < 2)
+
+    tx_pending_get_tail(tail, tx_pending)
+    tx_pending_queue_set_i(client, tail, tx_pending)
+    tx_pending_clients_pending_set_i(true, client, tx_pending)
+    tx_pending_set_tail(tail + 1, tx_pending)
+    return 0;
+}
+
+fun tx_pending_pop(1 client_addr) {
+    var pending_length = 0;
+    pending_length = tx_pending_length();
+    // This should only be called when length > 0
+    assert(pending_length)
+
+    get_tx_pending(tx_pending)
+    tx_pending_get_head(head, tx_pending)
+    tx_pending_queue_get_i(client, head, tx_pending)
+    !stw client_addr, client;
+    tx_pending_clients_pending_set_i(false, client, tx_pending)
+    tx_pending_set_head(head + 1, tx_pending)
+    return 0;
+}
+
+
+fun pnk_tx_return() {
+    var num_pending_tx = 0;
+    num_pending_tx = tx_pending_length();
+    if (!num_pending_tx) {
+        return 1;
+    }
+
+    get_tx_pending(tx_pending)
+
+    var client_addr = FUNC_BASE;
+    var transferred = false;
+
+    var req = 0;
+    while (req < num_pending_tx) {
+        tx_pending_pop(client_addr);
+        var client = lds {1} client_addr;
+        var reprocess = true;
+        var client_transferrred = false;
+        while (reprocess) {
+            var queue_processed = 0;
+            queue_processed = process_tx_queue(client);
+            client_transferrred = client_transferrred | queue_processed;
+            reprocess = false;
+
+            get_tx_queue_handle_cli_i(queue_handle, client)
+            handle_get_head(head, queue_handle)
+            serial_queue_empty(empty, queue_handle, head)
+            tx_pending_clients_pending_get_i(pending, client, tx_pending)
+            if ((!empty) && (!pending)) {
+                serial_cancel_producer_signal(queue_handle)
+                reprocess = true;
+            }
+        }
+        transferred = transferred | client_transferrred;
+        req = req + 1;
+    }
+
+    get_tx_queue_handle_drv(queue_handle_drv)
+    serial_require_producer_signal(signal, queue_handle_drv)
+    if (transferred && signal) {
+        serial_cancel_producer_signal(queue_handle_drv)
+        microkit_notify_delayed(DRIVER_CH)
+    }
+    return 0;
+}
+
+fun pnk_tx_provide(1 channel) {
+    if (channel > SERIAL_NUM_CLIENTS) {
+        // TODO: error
+        return 0;
+    }
+
+    get_tx_pending(tx_pending)
+
+    var active_client = channel - CLIENT_OFFSET;
+    var transferred = false;
+    var reprocess = true;
+    while (reprocess) {
+        var queue_processed = 0;
+        queue_processed = process_tx_queue(active_client);
+        transferred = transferred | queue_processed;
+        reprocess = false;
+
+        // If more data is available, re-process unless it has been pushed to pending transmits
+        get_tx_queue_handle_cli_i(queue_handle, active_client)
+        handle_get_head(head, queue_handle)
+        serial_queue_empty(empty, queue_handle, head)
+        tx_pending_clients_pending_get_i(pending, active_client, tx_pending)
+        if ((!empty) && (!pending)) {
+            serial_cancel_producer_signal(queue_handle)
+            reprocess = true;
+        }
+    }
+
+    get_tx_queue_handle_drv(queue_handle_drv)
+    serial_require_producer_signal(signal, queue_handle_drv)
+    if (transferred && signal) {
+        serial_cancel_producer_signal(queue_handle_drv)
+        microkit_notify_delayed(DRIVER_CH)
+    }
+    return 0;
+}
+
+
+export fun pnk_notified(1 channel) {
+    if (channel == DRIVER_CH) {
+        pnk_tx_return();
+    } else {
+        pnk_tx_provide(channel);
+    }
+    return 0;
+}

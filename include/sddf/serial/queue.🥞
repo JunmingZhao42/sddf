@@ -1,0 +1,456 @@
+/**
+ * Check if the queue is empty.
+ *
+ * @param queue_handle queue to check.
+ * @param local_head head which points to the next character to be dequeued.
+ *
+ * @return true indicates the queue is empty, false otherwise.
+ */
+#define serial_queue_empty(result, queue_handle, local_head)    \
+    handle_get_tail(tail, queue_handle)                         \
+    var result = (local_head == tail);                          \
+
+/**
+ * Check if the queue is full
+ *
+ * @param queue_handle queue to check.
+ * @param local_tail tail which points to the next enqueue slot.
+ *
+ * @return true indicates the buffer is full, false otherwise.
+ */
+#define serial_queue_full(result, queue_handle, local_tail) \
+    handle_get_head(head, queue_handle)                     \
+    get_size(size, queue_handle)                            \
+    var result = ((local_tail - head) == size);             \
+
+/**
+ * Enqueue a char into a queue.
+ *
+ * @param queue_handle queue to enqueue into.
+ * @param local_tail address of the tail to be incremented. This allows for clients to
+ *                      enqueue multiple characters before making the changes visible.
+ * @param character character to be enqueued.
+ *
+ * @return -1 when queue is empty, 0 on success.
+ */
+fun serial_enqueue(1 queue_handle, 1 local_tail_addr, 1 character) {
+    var local_tail = 0;
+    !ldw local_tail, local_tail_addr;
+    serial_queue_full(full, queue_handle, local_tail)
+    if (full) {
+        return -1;
+    }
+
+    // queue_handle->data_region[*local_tail % queue_handle->size] = character;
+    get_size(size, queue_handle)
+    pnk_modulo(index, local_tail, size)
+    get_data_region(data_region, queue_handle)
+    st8 (data_region + index), character;
+
+    // local_tail ++
+    local_tail = local_tail + 1;
+    !stw local_tail_addr, local_tail;
+    return 0;
+}
+
+/**
+ * Dequeue a char from a queue.
+ *
+ * @param queue_handle queue to dequeue from.
+ * @param local_head address of the head to be incremented. This allows for clients to
+ *                      dequeue multiple characters before making the changes visible.
+ * @param character character to copy into.
+ *
+ * @return -1 when queue is empty, 0 on success.
+ */
+fun serial_dequeue(1 queue_handle, 1 local_head_addr, 1 character_addr) {
+    var local_head = 0;
+    !ldw local_head, local_head_addr;
+    serial_queue_empty(empty, queue_handle, local_head)
+    if (empty) {
+        return -1;
+    }
+
+    // *character_addr = queue_handle->data_region[*local_head % queue_handle->size];
+    get_size(size, queue_handle)
+    pnk_modulo(index, local_head, size)
+    get_data_region(data_region, queue_handle)
+    var character = ld8 (data_region + index);
+    st8 character_addr, character;
+
+    // local_head ++
+    local_head = local_head + 1;
+    !stw local_head_addr, local_head;
+    return 0;
+}
+
+/**
+ * Update the value of the tail in the shared data structure to make
+ * locally enqueued data visible.
+ *
+ * @param queue_handle queue to update.
+ * @param local_tail tail which points to the last character enqueued.
+ */
+fun serial_update_visible_tail(1 queue_handle, 1 local_tail) {
+    handle_get_head(head, queue_handle)
+    handle_get_tail(tail, queue_handle)
+    get_size(size, queue_handle)
+    var max_tail = head + size;
+
+    var assert_val = 1;
+    // Ensure updates to tail dont overwrite existing data
+    if (head <= tail) {
+        assert_val = ((local_tail >= tail) || (local_tail < head));
+    } else {
+        assert_val = ((local_tail >= tail) && (local_tail < head));
+    }
+    assert(assert_val)
+
+    // Ensure updates to tail dont exceed size restraints
+    if (head <= max_tail) {
+        assert_val = (local_tail <= max_tail);
+    } else {
+        assert_val = ((local_tail >= head) || (local_tail <= max_tail));
+    }
+    assert(assert_val)
+
+    // TODO: add #ifdef CONFIG_ENABLE_SMP_SUPPORT
+    THREAD_MEMORY_RELEASE()
+
+    // queue_handle->queue->tail = local_tail;
+    handle_set_tail(local_tail, queue_handle)
+    return 0;
+}
+
+/**
+ * Update the value of the head in the shared data structure to make
+ * locally dequeued data visible.
+ *
+ * @param queue_handle queue to update.
+ * @param local_head head which points to the next character to dequeue.
+ */
+fun serial_update_visible_head(1 queue_handle, 1 local_head) {
+    handle_get_head(head, queue_handle)
+    handle_get_tail(tail, queue_handle)
+
+    var assert_val = 1;
+    // Ensure updates to head dont corrupt existing data
+    if (head <= tail) {
+        assert_val = (local_head >= head) && (local_head <= tail);
+    } else {
+        assert_val = (local_head >= head) || (local_head <= tail);
+    }
+    assert(assert_val)
+
+    // TODO: add #ifdef CONFIG_ENABLE_SMP_SUPPORT
+    THREAD_MEMORY_RELEASE()
+
+    // queue_handle->queue->head = local_head;
+    handle_set_head(local_head, queue_handle)
+    return 0;
+}
+
+fun serial_queue_contiguous_length(1 queue_handle) {
+    handle_get_head(head, queue_handle)
+    handle_get_tail(tail, queue_handle)
+
+    if (head <= tail) {
+        return (tail - head);
+    } else {
+        // TODO: not sure if we should use UINT64_MAX or UINT32_MAX
+        return (UINT32_MAX - head + tail);
+    }
+}
+
+fun serial_queue_length(1 queue_handle) {
+    handle_get_head(head, queue_handle)
+    handle_get_tail(tail, queue_handle)
+    get_size(size, queue_handle)
+
+    var ret = 0;
+    if (head <= tail) {
+        ret = serial_queue_contiguous_length(queue_handle);
+    } else {
+        ret = serial_queue_contiguous_length(queue_handle);
+        ret = ret + tail;
+    }
+    return ret;
+}
+
+fun serial_queue_free(1 queue_handle) {
+    get_size(size, queue_handle)
+    var len = 0;
+    len = serial_queue_length(queue_handle);
+    return (size - len);
+}
+
+fun serial_queue_contiguous_free(1 queue_handle) {
+    handle_get_head(head, queue_handle)
+    handle_get_tail(tail, queue_handle)
+    var free_size = 0;
+    free_size = serial_queue_free(queue_handle);
+
+    var ret = 0;
+    if ((tail + free_size) <= UINT32_MAX || (tail + free_size == 0)) {
+        ret = free_size;
+    } else {
+        ret = (UINT32_MAX - tail) + 1;
+    }
+    return ret;
+}
+
+/**
+ * Transfer all data from consume queue to produce queue.
+ *
+ * @param active_queue_handle queue to remove from.
+ * @param free_queue_handle queue to insert into.
+ */
+fun serial_transfer_all(1 active_queue_handle, 1 free_queue_handle) {
+    var active_len = 0;
+    active_len = serial_queue_length(active_queue_handle);
+    var free_len = 0;
+    free_len = serial_queue_free(free_queue_handle);
+
+    // make sure there is enough space to transfer all data
+    var assert_val = 1;
+    assert_val = (active_len <= free_len);
+    assert(assert_val)
+
+    while (active_len > 0) {
+        // copy all contiguous data
+        var active_ctg = 0;
+        active_ctg = serial_queue_contiguous_length(active_queue_handle);
+        var free_ctg = 0;
+        free_ctg = serial_queue_contiguous_free(free_queue_handle);
+
+        // to_transfer = min(active_ctg, free_ctg)
+        var to_transfer = 0;
+        if (active_ctg <= free_ctg) {
+            to_transfer = active_ctg;
+        } else {
+            to_transfer = free_ctg;
+        }
+
+        // dst = free_queue_handle->data_region + (free_queue_handle->queue->tail % free_queue_handle->size)
+        get_data_region(free_data_region, free_queue_handle)
+        handle_get_tail(free_tail, free_queue_handle)
+        get_size(free_size, free_queue_handle)
+        pnk_modulo(free_offset, free_tail, free_size)
+        var dst = free_data_region + free_offset;
+
+        // src = active_queue_handle->data_region + (active_queue_handle->queue->head % active_queue_handle->size)
+        get_data_region(active_data_region, active_queue_handle)
+        handle_get_head(active_head, active_queue_handle)
+        get_size(active_size, active_queue_handle)
+        pnk_modulo(active_offset, active_head, active_size)
+        var src = active_data_region + active_offset;
+
+        pnk_memcpy(dst, src, to_transfer);
+
+        // Make copy visible
+        serial_update_visible_tail(free_queue_handle, free_tail + to_transfer);
+        serial_update_visible_head(active_queue_handle, active_head + to_transfer);
+        active_len = serial_queue_length(active_queue_handle);
+    }
+    return 0;
+}
+
+/**
+ * Transfer all data from consume queue to produce queue.
+ *
+ * @param active_queue_handle queue to remove from.
+ * @param free_queue_handle queue to insert into.
+ * @param colour_start colour string to be printed at the start
+ * @param colour_end colour string to be printed at the end
+ */
+fun serial_transfer_all_with_colour(1 active_queue_handle, 1 free_queue_handle,
+                                    1 colour_start, 1 colour_end,
+                                    1 colour_start_len, 1 colour_end_len) {
+
+    var assert_val = 1;
+    var active_len = 0;
+    active_len = serial_queue_length(active_queue_handle);
+    var free_len = 0;
+    free_len = serial_queue_free(free_queue_handle);
+
+    var assert_val = (active_len + colour_start_len + colour_end_len) <= free_len;
+    assert(assert_val)
+
+    var colour_transferred = 0;
+    while (colour_transferred < colour_start_len) {
+        var remaining = colour_start_len - colour_transferred;
+        var free = 0;
+        free = serial_queue_contiguous_free(free_queue_handle);
+
+        // to_transfer = min(remaining, free)
+        var to_transfer = 0;
+        if (remaining <= free) {
+            to_transfer = remaining;
+        } else {
+            to_transfer = free;
+        }
+
+        // dst = colour_start + colour_transferred
+        get_data_region(free_data_region, free_queue_handle)
+        handle_get_tail(free_tail, free_queue_handle)
+        get_size(free_size, free_queue_handle)
+        pnk_modulo(free_offset, free_tail, free_size)
+
+        var dst = free_data_region + free_offset;
+
+        // src = colour_start + colour_transferred
+        var src = colour_start + colour_transferred;
+
+        pnk_memcpy(dst, src, to_transfer);
+
+        // Make copy visible
+        serial_update_visible_tail(free_queue_handle, free_tail + to_transfer);
+        colour_transferred = colour_transferred + to_transfer;
+    }
+
+    active_len = serial_queue_length(active_queue_handle);
+    while (active_len) {
+        // Copy all contiguous data
+        var active_ctg = 0;
+        active_ctg = serial_queue_contiguous_length(active_queue_handle);
+        var free_ctg = 0;
+        free_ctg = serial_queue_contiguous_free(free_queue_handle);
+
+        // to_transfer = min(active_ctg, free_ctg)
+        var to_transfer = 0;
+        if (active_ctg <= free_ctg) {
+            to_transfer = active_ctg;
+        } else {
+            to_transfer = free_ctg;
+        }
+
+        // dst = free_queue_handle->data_region + (free_queue_handle->queue->tail % free_queue_handle->size)
+        get_data_region(free_data_region, free_queue_handle)
+        handle_get_tail(free_tail, free_queue_handle)
+        get_size(free_size, free_queue_handle)
+        pnk_modulo(free_offset, free_tail, free_size)
+        var dst = free_data_region + free_offset;
+
+        // src = active_queue_handle->data_region + (active_queue_handle->queue->head % active_queue_handle->size)
+        get_data_region(active_data_region, active_queue_handle)
+        handle_get_head(active_head, active_queue_handle)
+        get_size(active_size, active_queue_handle)
+        pnk_modulo(active_offset, active_head, active_size)
+        var src = active_data_region + active_offset;
+
+        pnk_memcpy(dst, src, to_transfer);
+
+        // Make copy visible
+        serial_update_visible_tail(free_queue_handle, free_tail + to_transfer);
+        serial_update_visible_head(active_queue_handle, active_head + to_transfer);
+        active_len = serial_queue_length(active_queue_handle);
+    }
+
+    colour_transferred = 0;
+    while (colour_transferred < colour_end_len) {
+        var remaining = colour_end_len - colour_transferred;
+        var free = 0;
+        free = serial_queue_contiguous_free(free_queue_handle);
+
+        // to_transfer = min(remaining, free)
+        var to_transfer = 0;
+        if (remaining <= free) {
+            to_transfer = remaining;
+        } else {
+            to_transfer = free;
+        }
+
+        // dst = free_queue_handle->data_region + (free_queue_handle->queue->tail % free_queue_handle->size)
+        get_data_region(free_data_region, free_queue_handle)
+        handle_get_tail(free_tail, free_queue_handle)
+        get_size(free_size, free_queue_handle)
+        pnk_modulo(free_offset, free_tail, free_size)
+        var dst = free_data_region + free_offset;
+
+        // TODO: ^^ refactor those lengthy stuff to a function
+
+        // src = colour_end + colour_transferred
+        var src = colour_end + colour_transferred;
+
+        pnk_memcpy(dst, src, to_transfer);
+
+        // Make copy visible
+        serial_update_visible_tail(free_queue_handle, free_tail + to_transfer);
+        colour_transferred = colour_transferred + to_transfer;
+    }
+
+    return 0;
+}
+
+/**
+ * Initialise the shared queue.
+ *
+ * @param queue_handle queue handle to use.
+ * @param queue pointer to queue in shared memory.
+ * @param size size of the queue.
+ * @param data_region address of the data region.
+ */
+#define serial_queue_init(queue_handle, queue, size, data_region)   \
+    set_queue(queue, queue_handle)                                  \
+    set_size(size, queue_handle)                                    \
+    set_data_region(data_region, queue_handle)
+
+/**
+ * Indicate to producer of the queue that consumer requires signalling.
+ *
+ * @param queue queue handle of queue that requires signalling upon enqueuing.
+ */
+#define serial_request_consumer_signal(queue_handle)    \
+    get_queue(queue, queue_handle)                      \
+    clear_consumer_signalled(queue)                     \
+    THREAD_MEMORY_RELEASE()
+
+/**
+ * Indicate to consumer of the queue that producer requires signalling.
+ *
+ * @param queue queue handle of queue that requires signalling upon enqueuing.
+ */
+#define serial_request_producer_signal(queue_handle)    \
+    get_queue(queue, queue_handle)                      \
+    clear_producer_signalled(queue)                     \
+    THREAD_MEMORY_RELEASE()
+
+/**
+ * Indicate to producer of the queue that consumer has been signalled.
+ *
+ * @param queue queue handle of the queue that has been signalled.
+ */
+#define serial_cancel_consumer_signal(queue_handle) \
+    get_queue(queue, queue_handle)                  \
+    set_consumer_signalled(queue)                   \
+    THREAD_MEMORY_RELEASE()
+
+/**
+ * Indicate to consumer of the queue that producer has been signalled.
+ *
+ * @param queue queue handle of the queue that has been signalled.
+ */
+#define serial_cancel_producer_signal(queue_handle) \
+    get_queue(queue, queue_handle)                  \
+    set_producer_signalled(queue)                   \
+    THREAD_MEMORY_RELEASE()
+
+/**
+ * Consumer of the queue requires signalling.
+ *
+ * @param queue queue handle of the queue to check.
+ */
+#define serial_require_consumer_signal(result, queue_handle)    \
+    get_queue(queue, queue_handle)                              \
+    get_consumer_signalled(signal, queue)                       \
+    var result = (signal == 0);
+
+/**
+ * Producer of the queue requires signalling.
+ *
+ * @param queue queue handle of the queue to check.
+ */
+#define serial_require_producer_signal(result, queue_handle)    \
+    get_queue(queue, queue_handle)                              \
+    get_producer_signalled(signal, queue)                       \
+    var result = (signal == 0);

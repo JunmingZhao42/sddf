@@ -9,7 +9,7 @@
 #define SERIAL_TX_ONLY 0
 
 /* Associate a colour with each client's output. */
-#define SERIAL_WITH_COLOUR 1
+#define SERIAL_WITH_COLOUR 0
 
 /* Control character to switch input stream - ctrl \. To input character input twice. */
 #define SERIAL_SWITCH_CHAR 28

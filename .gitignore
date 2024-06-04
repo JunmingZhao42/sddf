@@ -10,3 +10,9 @@ ci_build/
 *.orig
 *~
 .#*
+my_build.sh
+run.sh
+cake-x64-64/
+*.S
+*.log
+examples/serial/temp.🥞

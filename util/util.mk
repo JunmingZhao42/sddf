@@ -3,7 +3,7 @@
 # Copyright 2024, UNSW
 #
 # SPDX-License-Identifier: BSD-2-Clause
-#  
+#
 # Include this snippet in your project Makefile to build
 # sddf_libutil.a and sddf_libutil_debug.a
 # sddf_libutil.a needs access to the serial device, and
@@ -27,6 +27,9 @@ VPATH += ${SDDF}/util
 
 sddf_printf.o: ${SDDF}/util/printf.c
 	${CC} ${CFLAGS} -c -o $@ $<
+
+pancake_ffi.o: ${SDDF}/util/pancake_ffi.c
+	$(CC) -c $(CFLAGS) $< -o $@
 
 clean::
 	${RM} -f ${OBJS_LIBUTIL} ${OBJS_LIBUTIL:.o=.d} putchar_debug.[od] putchar_serial.[od]

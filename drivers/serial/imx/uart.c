@@ -6,21 +6,61 @@
 #include <serial_config.h>
 #include <uart.h>
 
-#define IRQ_CH 0
-#define TX_CH  1
-#define RX_CH  2
-
 serial_queue_t *rx_queue;
 serial_queue_t *tx_queue;
 
 char *rx_data;
 char *tx_data;
 
-serial_queue_handle_t rx_queue_handle;
-serial_queue_handle_t tx_queue_handle;
+serial_queue_handle_t* rx_queue_handle;
+serial_queue_handle_t* tx_queue_handle;
 
 uintptr_t uart_base;
 volatile imx_uart_regs_t *uart_regs;
+
+static char cml_memory[1024*4];
+
+extern void cml_main(void);
+extern void pnk_notified(microkit_channel ch);
+extern void *cml_heap;
+extern void *cml_stack;
+extern void *cml_stackend;
+
+void cml_exit(int arg) {
+    microkit_dbg_puts("ERROR! We should not be getting here\n");
+}
+
+void cml_err(int arg) {
+    if (arg == 3) {
+        microkit_dbg_puts("Memory not ready for entry. You may have not run the init code yet, or be trying to enter during an FFI call.\n");
+    }
+  cml_exit(arg);
+}
+
+/* Need to come up with a replacement for this clear cache function. Might be worth testing just flushing the entire l1 cache, but might cause issues with returning to this file*/
+void cml_clear() {
+    microkit_dbg_puts("Trying to clear cache\n");
+}
+
+void init_pancake_mem() {
+    unsigned long sz = 1024*2;
+    unsigned long cml_heap_sz = sz;
+    unsigned long cml_stack_sz = sz;
+    cml_heap = cml_memory;
+    cml_stack = cml_heap + cml_heap_sz;
+    cml_stackend = cml_stack + cml_stack_sz;
+}
+
+void init_pancake_data() {
+    uintptr_t *heap = (uintptr_t *) cml_heap;
+    heap[5] = (uintptr_t) rx_data;
+    heap[6] = (uintptr_t) tx_data;
+    heap[7] = (uintptr_t) rx_queue;
+    heap[8] = (uintptr_t) tx_queue;
+    rx_queue_handle = (serial_queue_handle_t *) &heap[9];
+    tx_queue_handle = (serial_queue_handle_t *) &heap[12];
+    heap[15] = (volatile uintptr_t) uart_regs;
+}
 
 /*
  * BaudRate = RefFreq / (16 * (BMR + 1)/(BIR + 1) )
@@ -39,88 +79,6 @@ static void set_baud(long bps)
     uart_regs->fcr = fcr;
     uart_regs->bir = bir;
     uart_regs->bmr = bmr;
-}
-
-static void tx_provide(void)
-{
-    bool reprocess = true;
-    bool transferred = false;
-    while (reprocess) {
-        char c;
-        while (!(uart_regs->ts & UART_TST_TX_FIFO_FULL)
-               && !serial_dequeue(&tx_queue_handle, &tx_queue_handle.queue->head, &c)) {
-            uart_regs->txd = (uint32_t)c;
-            transferred = true;
-        }
-
-        serial_request_producer_signal(&tx_queue_handle);
-        /* If transmit fifo is full and there is data remaining to be sent, enable interrupt when fifo is no longer full */
-        if (uart_regs->ts & UART_TST_TX_FIFO_FULL && !serial_queue_empty(&tx_queue_handle, tx_queue_handle.queue->head)) {
-            uart_regs->cr1 |= UART_CR1_TX_READY_INT;
-        } else {
-            uart_regs->cr1 &= ~UART_CR1_TX_READY_INT;
-        }
-        reprocess = false;
-
-        if (!(uart_regs->ts & UART_TST_TX_FIFO_FULL) && !serial_queue_empty(&tx_queue_handle, tx_queue_handle.queue->head)) {
-            serial_cancel_producer_signal(&tx_queue_handle);
-            uart_regs->cr1 &= ~UART_CR1_TX_READY_INT;
-            reprocess = true;
-        }
-    }
-
-    if (transferred && serial_require_consumer_signal(&tx_queue_handle)) {
-        serial_cancel_consumer_signal(&tx_queue_handle);
-        microkit_notify(TX_CH);
-    }
-}
-
-static void rx_return(void)
-{
-    bool reprocess = true;
-    bool enqueued = false;
-    while (reprocess) {
-        while (!(uart_regs->ts & UART_TST_RX_FIFO_EMPTY) && !serial_queue_full(&rx_queue_handle, rx_queue_handle.queue->tail)) {
-            char c = (char) uart_regs->rxd;
-            serial_enqueue(&rx_queue_handle, &rx_queue_handle.queue->tail, c);
-            enqueued = true;
-        }
-
-        if (!(uart_regs->ts & UART_TST_RX_FIFO_EMPTY) && serial_queue_full(&rx_queue_handle, rx_queue_handle.queue->tail)) {
-            /* Disable rx interrupts until virtualisers queue is no longer empty. */
-            uart_regs->cr1 &= ~UART_CR1_RX_READY_INT;
-            serial_require_consumer_signal(&rx_queue_handle);
-        }
-        reprocess = false;
-
-        if (!(uart_regs->ts & UART_TST_RX_FIFO_EMPTY) && !serial_queue_full(&rx_queue_handle, rx_queue_handle.queue->tail)) {
-            serial_cancel_consumer_signal(&rx_queue_handle);
-            uart_regs->cr1 |= UART_CR1_RX_READY_INT;
-            reprocess = true;
-        }
-    }
-
-    if (enqueued && serial_require_producer_signal(&rx_queue_handle)) {
-        serial_cancel_producer_signal(&rx_queue_handle);
-        microkit_notify(RX_CH);
-    }
-}
-
-static void handle_irq(void)
-{
-    while (uart_regs->sr1 & UART_SR1_ABNORMAL || uart_regs->sr1 & UART_SR1_RX_RDY
-           || (uart_regs->cr1 & UART_CR1_TX_READY_INT && uart_regs->sr1 & UART_SR1_TX_RDY)) {
-        if (uart_regs->sr1 & UART_SR1_RX_RDY) {
-            rx_return();
-        }
-        if (uart_regs->cr1 & UART_CR1_TX_READY_INT && uart_regs->sr1 & UART_SR1_TX_RDY) {
-            tx_provide();
-        }
-        if (uart_regs->sr1 & UART_SR1_ABNORMAL) {
-            sddf_dprintf("UART|ERROR: Uart device encountered an error with status register %u\n", uart_regs->sr1);
-            uart_regs->sr1 |= UART_SR1_ABNORMAL;
-        }
-    }
 }
 
 static void uart_setup(void)
@@ -170,27 +128,14 @@ static void uart_setup(void)
 void init(void)
 {
     uart_setup();
-
-    serial_queue_init(&rx_queue_handle, rx_queue, SERIAL_RX_DATA_REGION_SIZE_DRIV, rx_data);
-    serial_queue_init(&tx_queue_handle, tx_queue, SERIAL_TX_DATA_REGION_SIZE_DRIV, tx_data);
+    init_pancake_mem();
+    init_pancake_data();
+    serial_queue_init(rx_queue_handle, rx_queue, SERIAL_RX_DATA_REGION_SIZE_DRIV, rx_data);
+    serial_queue_init(tx_queue_handle, tx_queue, SERIAL_TX_DATA_REGION_SIZE_DRIV, tx_data);
+    cml_main();
 }
 
 void notified(microkit_channel ch)
 {
-    switch (ch) {
-    case IRQ_CH:
-        handle_irq();
-        microkit_irq_ack_delayed(ch);
-        break;
-    case TX_CH:
-        tx_provide();
-        break;
-    case RX_CH:
-        uart_regs->cr1 |= UART_CR1_RX_READY_INT;
-        rx_return();
-        break;
-    default:
-        sddf_dprintf("UART|LOG: received notification on unexpected channel: %u\n", ch);
-        break;
-    }
+    pnk_notified(ch);
 }

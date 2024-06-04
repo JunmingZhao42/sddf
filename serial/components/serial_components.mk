@@ -29,12 +29,23 @@ ${CHECK_SERIAL_FLAGS_MD5}:
 	-rm -f .serial_cflags-*
 	touch $@
 
+VIRT_RX_PNK = ${UTIL}/util.🥞 ${SERIAL_QUEUE_INCLUDE}/queue_helper.🥞 ${SERIAL_QUEUE_INCLUDE}/queue.🥞 ${SDDF}/serial/components/virt_rx.🥞
+VIRT_TX_PNK = ${UTIL}/util.🥞 ${SERIAL_QUEUE_INCLUDE}/queue_helper.🥞 ${SERIAL_QUEUE_INCLUDE}/queue.🥞 ${SDDF}/serial/components/virt_tx.🥞
 
-serial_%_virt.elf: virt_%.o
+serial_%_virt.elf: virt_%_pnk.o virt_%.o pancake_ffi.o
 	$(LD) $(LDFLAGS) $^ $(LIBS) -o $@
 
+virt_%_pnk.o: virt_%_pnk.S
+	$(CC) -c -mcpu=$(CPU) $< -o $@
+
+virt_rx_pnk.S: $(VIRT_RX_PNK)
+	cat $(VIRT_RX_PNK) | cpp -P | $(CAKE_COMPILER) --target=arm8 --pancake --main_return=true > $@
+
+virt_tx_pnk.S: $(VIRT_TX_PNK)
+	cat $(VIRT_TX_PNK) | cpp -P | $(CAKE_COMPILER) --target=arm8 --pancake --main_return=true > $@
+
 virt_tx.o virt_rx.o: ${CHECK_SERIAL_FLAGS_MD5}
-virt_%.o: ${SDDF}/serial/components/virt_%.c 
+virt_%.o: ${SDDF}/serial/components/virt_%.c
 	${CC} ${CFLAGS} ${CFLAGS_serial} -o $@ -c $<
 
 clean::
