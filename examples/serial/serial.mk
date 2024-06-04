@@ -17,7 +17,7 @@ endif
 
 ifeq ($(strip $(TOOLCHAIN)),)
 	TOOLCHAIN := aarch64-none-elf
-	LIBC := $(dir $(realpath $(shell aarch64-none-elf-gcc --print-file-name libc.a)))	
+	LIBC := $(dir $(realpath $(shell aarch64-none-elf-gcc --print-file-name libc.a)))
 endif
 
 BUILD_DIR ?= build
@@ -57,6 +57,7 @@ SERIAL_NUM_CLIENTS := -DSERIAL_NUM_CLIENTS=2
 SERIAL_COMPONENTS := $(SDDF)/serial/components
 UART_DRIVER := $(SDDF)/drivers/serial/$(DRIVER_DIR)
 SERIAL_CONFIG_INCLUDE:=${TOP}/include/serial_config
+SERIAL_QUEUE_INCLUDE := ${SDDF}/include/sddf/serial
 BOARD_DIR := $(MICROKIT_SDK)/board/$(MICROKIT_BOARD)/$(MICROKIT_CONFIG)
 SYSTEM_FILE := ${TOP}/board/$(MICROKIT_BOARD)/serial.system
 
@@ -95,7 +96,15 @@ include ${SERIAL_COMPONENTS}/serial_components.mk
 %.elf: %.o
 	${LD} -o $@ ${LDFLAGS} $< ${LIBS}
 
-serial_server.elf: serial_server.o libsddf_util.a
+SERVER_PNK = ${UTIL}/util.🥞 ${SERIAL_QUEUE_INCLUDE}/queue_helper.🥞 ${SERIAL_QUEUE_INCLUDE}/queue.🥞 ${TOP}/server.🥞 ${UTIL}/putchar_s.🥞
+
+server_pnk.o: server_pnk.S
+	$(CC) -c -mcpu=$(CPU) $< -o $@
+
+server_pnk.S: $(SERVER_PNK)
+	cat $(SERVER_PNK) | cpp -P | $(CAKE_COMPILER) --target=arm8 --pancake --main_return=true > $@
+
+serial_server.elf: server_pnk.o serial_server.o libsddf_util.a pancake_ffi.o
 	$(LD) $(LDFLAGS) $^ $(LIBS) -o $@
 
 serial_server.o: ${TOP}/serial_server.c ${CHECK_FLAGS_BOARD_MD5}

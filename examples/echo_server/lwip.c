@@ -278,8 +278,14 @@ static err_t ethernet_init(struct netif *netif)
 static void netif_status_callback(struct netif *netif)
 {
     if (dhcp_supplied_address(netif)) {
-        sddf_printf("LWIP|NOTICE: DHCP request for %s returned IP address: %s\r\n", microkit_name,
-                    ip4addr_ntoa(netif_ip4_addr(netif)));
+        // sddf_printf("LWIP|NOTICE: DHCP request for %s returned IP address: %s\r\n", microkit_name,
+        //            ip4addr_ntoa(netif_ip4_addr(netif)));
+        char *ip = ip4addr_ntoa(netif_ip4_addr(netif));
+        microkit_dbg_putc('\n');
+        microkit_dbg_puts(microkit_name);
+        microkit_dbg_puts(": ");
+        microkit_dbg_puts(ip);
+        microkit_dbg_putc('\n');
     }
 }
 

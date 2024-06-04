@@ -7,7 +7,7 @@
 static microkit_channel tx_ch;
 static serial_queue_handle_t *tx_queue_handle;
 
-static uint32_t local_tail;
+static uint64_t local_tail;
 
 /* Ensure to call serial_putchar_init during initialisation. Multiplexes output based on \n or when buffer is full. */
 void _sddf_putchar(char character)
@@ -35,6 +35,8 @@ void sddf_putchar_unbuffered(char character)
     }
 
     serial_enqueue(tx_queue_handle, &local_tail, character);
+    microkit_dbg_putc((char) tx_queue_handle->queue->head + 48);
+    microkit_dbg_putc('\n');
 
     serial_update_visible_tail(tx_queue_handle, local_tail);
     if (serial_require_producer_signal(tx_queue_handle)) {

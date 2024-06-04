@@ -1,0 +1,212 @@
+#define IRQ_CH 0
+#define TX_CH 1
+#define RX_CH 2
+
+// Return the address of the UART registers
+#define get_uart_base(regs) 				\
+	var uart_base = @base + WORD_SIZE * 15; \
+	var regs = lds {1} uart_base; 			\
+
+#define get_rx_data(rx_data) 					\
+	var rx_data_addr = @base + WORD_SIZE * 5; 	\
+	var rx_data = lds {1} rx_data_addr; 		\
+
+#define get_tx_data(tx_data) 					\
+	var tx_data_addr = @base + WORD_SIZE * 6; 	\
+	var tx_data = lds {1} tx_data_addr; 		\
+
+#define get_rx_queue(rx_queue) 					\
+	var rx_queue_addr = @base + WORD_SIZE * 7; 	\
+	var rx_rueue = lds {1} rx_queue_addr; 		\
+
+#define get_tx_queue(tx_queue) 					\
+	var tx_queue_addr = @base + WORD_SIZE * 8; 	\
+	var tx_queue = lds {1} tx_queue_addr; 		\
+
+#define get_rx_queue_handle(rx_queue_handle) 	 \
+	var rx_queue_handle = @base + WORD_SIZE * 9; \
+
+#define get_tx_queue_handle(tx_queue_handle) 	  \
+	var tx_queue_handle = @base + WORD_SIZE * 12; \
+
+fun main() {
+	return 0;
+}
+
+fun tx_provide() {
+    var reprocess = true;
+    var transferred = false;
+	get_uart_base(regs)
+	get_tx_queue_handle(tx_queue_handle)
+
+	while (reprocess) {
+		var c_addr = FUNC_BASE + 512;
+
+		while (true) {
+			get_imx_uart_regs_ts(ts, regs)
+			if (ts & UART_TST_TX_FIFO_FULL) {
+				break;
+			}
+			get_queue(head_addr, tx_queue_handle)
+			head_addr = head_addr + WORD_SIZE;
+			var dequeue_ret = 0;
+			dequeue_ret = serial_dequeue(tx_queue_handle, head_addr, c_addr);
+			if (dequeue_ret) {
+				break;
+			}
+
+			var txd = lds {1} c_addr;
+			set_imx_uart_regs_txd(txd, regs)
+			transferred = true;
+		}
+
+		serial_request_producer_signal(tx_queue_handle)
+		// If transmit fifo is full and there is data remaining to be sent, enable interrupt when fifo is no longer full
+		get_imx_uart_regs_ts(ts, regs)
+		handle_get_head(head, tx_queue_handle)
+		serial_queue_empty(empty, tx_queue_handle, head)
+		if (((ts & UART_TST_TX_FIFO_FULL) && (!empty))) {
+			get_imx_uart_regs_cr1(cr1, regs)
+			var new_cr1 = cr1 | UART_CR1_TX_READY_INT;
+			set_imx_uart_regs_cr1(new_cr1, regs)
+		} else {
+			// ~UART_CR1_TX_READY_INT == UART_CR1_TX_READY_INT ^ (-1)
+			get_imx_uart_regs_cr1(cr1, regs)
+			var new_cr1 = cr1 & ((-1) ^ UART_CR1_TX_READY_INT);
+			set_imx_uart_regs_cr1(new_cr1, regs)
+		}
+		reprocess = false;
+
+		get_imx_uart_regs_ts(ts, regs)
+		handle_get_head(head, tx_queue_handle)
+		serial_queue_empty(empty, tx_queue_handle, head)
+		if ((!(ts & UART_TST_TX_FIFO_FULL)) && (!empty)) {
+			serial_cancel_producer_signal(tx_queue_handle)
+			get_imx_uart_regs_cr1(cr1, regs)
+			var new_cr1 = cr1 & ((-1) ^ UART_CR1_TX_READY_INT);
+			set_imx_uart_regs_cr1(new_cr1, regs)
+			reprocess = true;
+		}
+	}
+
+	serial_require_consumer_signal(signal, tx_queue_handle)
+	if ((transferred && signal)) {
+		serial_cancel_consumer_signal(tx_queue_handle)
+		microkit_notify(TX_CH)
+	}
+
+    return 0;
+}
+
+fun rx_return() {
+	var reprocess = true;
+	var enqueued = false;
+	get_rx_queue_handle(rx_queue_handle)
+	get_queue(queue, rx_queue_handle)
+
+	while (reprocess) {
+		get_uart_base(regs)
+
+		while (true) {
+			get_imx_uart_regs_ts(ts, regs)
+			if (ts & UART_TST_RX_FIFO_EMPTY) {
+				break;
+			}
+			handle_get_tail(tail, rx_queue_handle)
+			serial_queue_full(full, rx_queue_handle, tail)
+			if (full) {
+				break;
+			}
+			get_imx_uart_regs_rxd(c, regs)
+			get_queue(tail_addr, rx_queue_handle)
+			get_queue(queue, rx_queue_handle)
+			serial_enqueue(rx_queue_handle, tail_addr, c);
+			get_queue(queue, rx_queue_handle)
+			enqueued = true;
+		}
+
+		get_imx_uart_regs_ts(ts, regs)
+		handle_get_tail(tail, rx_queue_handle)
+		serial_queue_full(full, rx_queue_handle, tail)
+		if (((!(ts & UART_TST_RX_FIFO_EMPTY)) && full)) {
+			get_imx_uart_regs_cr1(cr1, regs)
+			var new_cr1 = cr1 & ((-1) ^ UART_CR1_RX_READY_INT);
+			set_imx_uart_regs_cr1(new_cr1, regs)
+			serial_request_consumer_signal(rx_queue_handle)
+		}
+		reprocess = false;
+
+		get_imx_uart_regs_ts(ts, regs)
+		handle_get_tail(tail, rx_queue_handle)
+		serial_queue_full(full, rx_queue_handle, tail)
+		if ((!(ts & UART_TST_RX_FIFO_EMPTY)) && (!full)) {
+			serial_cancel_consumer_signal(rx_queue_handle)
+			get_imx_uart_regs_cr1(cr1, regs)
+			var new_cr1 = cr1 | UART_CR1_RX_READY_INT;
+			set_imx_uart_regs_cr1(new_cr1, regs)
+			reprocess = true;
+		}
+	}
+
+	serial_require_producer_signal(signal, rx_queue_handle)
+	if (enqueued && signal) {
+		serial_cancel_producer_signal(rx_queue_handle)
+		microkit_notify(RX_CH)
+	}
+	return 0;
+}
+
+fun handle_irq() {
+	get_uart_base(regs)
+	get_imx_uart_regs_sr1(sr1, regs)
+	get_imx_uart_regs_cr1(cr1, regs)
+
+	while ((sr1 & UART_SR1_ABNORMAL) || (sr1 & UART_SR1_RX_RDY) ||
+		((cr1 & UART_CR1_TX_READY_INT) && (sr1 & UART_SR1_TX_RDY))) {
+
+		reget_imx_uart_regs_sr1(sr1, regs)
+		if (sr1 & UART_SR1_RX_RDY) {
+			rx_return();
+		}
+
+		reget_imx_uart_regs_sr1(sr1, regs)
+		reget_imx_uart_regs_cr1(cr1, regs)
+		if ((cr1 & UART_CR1_TX_READY_INT) && (sr1 & UART_SR1_TX_RDY)) {
+			tx_provide();
+		}
+
+		reget_imx_uart_regs_sr1(sr1, regs)
+		if (sr1 & UART_SR1_ABNORMAL) {
+			// TODO: error
+			// sddf_dprintf("UART|ERROR: Uart device encountered an error with status register %u\n", uart_regs->sr1);
+			var new_sr1 = sr1 | UART_SR1_ABNORMAL;
+			set_imx_uart_regs_sr1(new_sr1, regs)
+		}
+
+		reget_imx_uart_regs_sr1(sr1, regs)
+		reget_imx_uart_regs_cr1(cr1, regs)
+	}
+    return 0;
+}
+
+export fun pnk_notified(1 channel) {
+	if (channel == IRQ_CH) {
+		handle_irq();
+		microkit_irq_ack_delayed(channel)
+	}
+	if (channel == TX_CH) {
+		tx_provide();
+	}
+	if (channel == RX_CH) {
+		get_uart_base(regs)
+		get_imx_uart_regs_cr1(cr1, regs)
+		var new_cr1 = cr1 | UART_CR1_RX_READY_INT;
+		set_imx_uart_regs_cr1(new_cr1, regs)
+		rx_return();
+	} else {
+		// TODO: error
+		// sddf_dprintf("UART|LOG: received notification on unexpected channel: %u\n", ch);
+		return 0;
+	}
+	return 0;
+}

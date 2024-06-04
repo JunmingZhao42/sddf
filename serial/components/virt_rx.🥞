@@ -1,0 +1,236 @@
+// TODO: Change this to take makefile argument
+#define SERIAL_NUM_CLIENTS 2
+
+#define DRIVER_CH 0
+#define CLIENT_OFFSET 1
+
+#define MAX_CLI_BASE_10 4
+#define NORMAL 0
+#define SWITCHED 1
+#define NUMBER 2
+
+#define SERIAL_SWITCH_CHAR 28
+#define SERIAL_TERMINATE_NUM 13
+
+#define get_rx_queue_drv(queue_drv)     \
+	var addr = @base + WORD_SIZE * 5;   \
+	var queue_drv = lds {1} addr; 		\
+
+#define get_rx_queue_cli0(queue_cli0)   \
+	var addr = @base + WORD_SIZE * 6;   \
+	var queue_cli0 = lds {1} addr; 		\
+
+#define get_rx_data_drv(data_drv)       \
+	var addr = @base + WORD_SIZE * 7;   \
+	var data_drv = lds {1} addr; 		\
+
+#define get_rx_data_cli0(data_cli0)     \
+	var addr = @base + WORD_SIZE * 8;   \
+	var data_cli0 = lds {1} addr; 		\
+
+#define get_current_mode(mode)          \
+	var addr = @base + WORD_SIZE * 9;   \
+	var mode = lds {1} addr; 		    \
+
+#define set_current_mode(mode)          \
+    var addr = @base + WORD_SIZE * 9;   \
+    stw addr, mode; 				    \
+
+#define get_current_client(client)      \
+    var addr = @base + WORD_SIZE * 10;  \
+    var client = lds {1} addr; 		    \
+
+#define set_current_client(client)      \
+    var addr = @base + WORD_SIZE * 10;  \
+    stw addr, client; 				    \
+
+#define get_next_client_index(index)    \
+    var addr = @base + WORD_SIZE * 11;  \
+    var index = lds {1} addr; 		    \
+
+#define set_next_client_index(index)    \
+    var addr = @base + WORD_SIZE * 11;  \
+    stw addr, index; 				    \
+
+#define get_rx_queue_handle_drv(queue_handle)   \
+    var queue_handle = @base + WORD_SIZE * 12;  \
+
+#define get_rx_queue_handle_cli(queue_handle)   \
+    var queue_handle = @base + WORD_SIZE * 15;  \
+
+#define get_rx_queue_handle_cli_i(queue_handle, i)   \
+    var queue_handle = @base + WORD_SIZE * (15 + i*QUEUE_HANDLE_SIZE);  \
+
+// char next_client[MAX_CLI_BASE_10 + 1];
+#define get_next_client_addr(next_client)    \
+    var next_client = @base + WORD_SIZE * (15 + SERIAL_NUM_CLIENTS * QUEUE_HANDLE_SIZE);  \
+
+#define next_client_get_i(client, i)    \
+    var addr = @base + WORD_SIZE * (15 + SERIAL_NUM_CLIENTS * QUEUE_HANDLE_SIZE) + i;  \
+    var client = ld8 addr; 	\
+
+#define next_client_set_i(client, i)    \
+    var addr = @base + WORD_SIZE * (15 + SERIAL_NUM_CLIENTS * QUEUE_HANDLE_SIZE) + i;  \
+    st8 addr, client; 	\
+
+fun main() {
+    return 0;
+}
+
+fun pnk_reset_state() {
+    get_next_client_addr(next_client)
+    pnk_memset(next_client, 0, MAX_CLI_BASE_10 + 1);
+    set_next_client_index(0)
+    set_current_mode(NORMAL)
+    return 0;
+}
+
+fun rx_return() {
+    var reprocess = true;
+    var transferred = false;
+
+    get_current_client(current_client)
+    get_rx_queue_handle_cli_i(queue_handle, current_client)
+    handle_get_tail(tail, queue_handle)
+    var local_tail_addr = FUNC_BASE + 512;
+    stw local_tail_addr, tail;
+
+    get_rx_queue_handle_drv(queue_handle_drv)
+    get_next_client_addr(next_client)
+
+    var c_addr = FUNC_BASE + 520;
+    var c = 0;
+
+    while (reprocess) {
+        get_queue(head_addr, queue_handle_drv)
+        head_addr = head_addr + WORD_SIZE;
+        var dq = 0;
+        while (true) {
+            dq = serial_dequeue(queue_handle_drv, head_addr, c_addr);
+            var myc = ld8 c_addr;
+            if (dq) {
+                break;
+            }
+
+            get_current_mode(mode)
+            if (mode == NORMAL) {
+                c = ld8 c_addr;
+                if (c == SERIAL_SWITCH_CHAR) {
+                    set_current_mode(SWITCHED)
+                } else {
+                    get_current_client(curr_c)
+                    get_rx_queue_handle_cli_i(qhandle, curr_c)
+                    var eq = 0;
+                    eq = serial_enqueue(qhandle, local_tail_addr, c);
+                    if (eq == 0) {
+                        transferred = true;
+                    }
+                }
+            }
+            if (mode == SWITCHED) {
+                c = ld8 c_addr;
+                pnk_isdigit(isdigit, c)
+                if (isdigit) {
+                    get_next_client_index(index)
+                    next_client_set_i(c, index)
+                    set_current_mode(NUMBER)
+                } else {
+                    if (c == SERIAL_SWITCH_CHAR) {
+                        get_current_client(curr_c)
+                        get_rx_queue_handle_cli_i(qhandle, curr_c)
+                        var eq = 0;
+                        eq = serial_enqueue(qhandle, local_tail_addr, c);
+                        if (eq == 0) {
+                            transferred = true;
+                        }
+                    }
+                    pnk_reset_state();
+                }
+            }
+            if (mode == NUMBER) {
+                get_next_client_addr(next_client)
+                c = ld8 c_addr;
+                if (c == SERIAL_TERMINATE_NUM) {
+                    var input_number = 0;
+                    input_number = pnk_atoi(next_client);
+                    if ((input_number >= 0) && (input_number < SERIAL_NUM_CLIENTS)) {
+                        get_current_client(curr_c)
+                        get_rx_queue_handle_cli_i(qhandle, curr_c)
+                        serial_require_producer_signal(signal, qhandle)
+                        if (transferred && signal) {
+                            var local_tail = lds {1} local_tail_addr;
+                            serial_update_visible_tail(qhandle, local_tail);
+                            serial_cancel_producer_signal(qhandle)
+                            var ch = curr_c + CLIENT_OFFSET;
+                            microkit_notify(ch)
+                        }
+                        set_current_client(input_number)
+                        handle_get_tail(tail, qhandle)
+                        stw local_tail_addr, tail;
+                        transferred = false;
+                    }
+                    // TODO: error message
+                    // else {
+                        // sddf_dprintf("VIRT_RX|LOG: User requested to switch to an invalid client %d\n", input_number);
+                    // }
+                    pnk_reset_state();
+                } else {
+                    get_next_client_index(index)
+                    pnk_isdigit(isdigit, c)
+                    if ((index < MAX_CLI_BASE_10) && isdigit) {
+                        next_client_set_i(c, index)
+                        set_next_client_index(index + 1)
+                    } else {
+                        // TODO
+                        // sddf_dprintf("VIRT_RX|LOG: User entered too many (%u < %u) or invalid digit (%c)\n", *next_client_index + 1,
+                        //              MAX_CLI_BASE_10, c);
+                        pnk_reset_state();
+                    }
+                }
+            }
+        }
+
+        var local_tail = lds {1} local_tail_addr;
+        get_current_client(current_client)
+        get_rx_queue_handle_cli_i(queue_handle, current_client)
+        serial_update_visible_tail(queue_handle, local_tail);
+        serial_request_producer_signal(queue_handle_drv)
+        reprocess = false;
+
+        handle_get_head(head, queue_handle_drv)
+        serial_queue_empty(empty, queue_handle_drv, head)
+        if (empty == 0) {
+            serial_cancel_producer_signal(queue_handle_drv)
+            reprocess = true;
+        }
+    }
+
+    handle_get_tail(tail, queue_handle_drv)
+    serial_queue_full(full, queue_handle_drv, tail)
+    serial_require_consumer_signal(signal, queue_handle_drv)
+    if ((full == 0) && signal) {
+        serial_cancel_consumer_signal(queue_handle_drv)
+        microkit_notify(DRIVER_CH)
+    }
+
+    get_current_client(current_client)
+    get_rx_queue_handle_cli_i(queue_handle, current_client)
+    serial_require_producer_signal(signal, queue_handle)
+    if (transferred && signal) {
+        serial_cancel_producer_signal(queue_handle)
+        var ch = current_client + CLIENT_OFFSET;
+        microkit_notify(ch)
+    }
+    return 0;
+}
+
+export fun pnk_notified(1 channel) {
+    if (channel == DRIVER_CH) {
+        rx_return();
+    }
+    // TODO: error
+    // else {
+    //  sddf_dprintf("VIRT_RX|LOG: received notification on unexpected channel: %u\n", ch);
+    // }
+    return 0;
+}

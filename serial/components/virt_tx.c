@@ -32,175 +32,88 @@ char *clients_colours[SERIAL_NUM_CLIENTS];
 
 #endif
 
-serial_queue_handle_t tx_queue_handle_drv;
-serial_queue_handle_t tx_queue_handle_cli[SERIAL_NUM_CLIENTS];
+serial_queue_handle_t *tx_queue_handle_drv;
+serial_queue_handle_t *tx_queue_handle_cli;
 
 typedef struct tx_pending {
-    uint32_t queue[SERIAL_NUM_CLIENTS];
-    bool clients_pending[SERIAL_NUM_CLIENTS];
-    uint32_t head;
-    uint32_t tail;
+    uint64_t queue[SERIAL_NUM_CLIENTS];
+    uint64_t clients_pending[SERIAL_NUM_CLIENTS];
+    uint64_t head;
+    uint64_t tail;
 } tx_pending_t;
 
-tx_pending_t tx_pending;
+tx_pending_t *tx_pending;
 
-static uint32_t tx_pending_length(void)
-{
-    return tx_pending.tail - tx_pending.head;
+static char cml_memory[1024*4];
+
+extern void cml_main(void);
+extern void pnk_notified(microkit_channel ch);
+extern void *cml_heap;
+extern void *cml_stack;
+extern void *cml_stackend;
+
+void cml_exit(int arg) {
+    microkit_dbg_puts("ERROR! We should not be getting here\n");
 }
 
-static void tx_pending_push(uint32_t client)
-{
-    /* Ensure client is not already pending */
-    if (tx_pending.clients_pending[client]) {
-        return;
+void cml_err(int arg) {
+    if (arg == 3) {
+        microkit_dbg_puts("Memory not ready for entry. You may have not run the init code yet, or be trying to enter during an FFI call.\n");
     }
-
-    /* Ensure the pending queue is not already full */
-    assert(tx_pending_length() < SERIAL_NUM_CLIENTS);
-
-    tx_pending.queue[tx_pending.tail] = client;
-    tx_pending.clients_pending[client] = true;
-    tx_pending.tail++;
+  cml_exit(arg);
 }
 
-static void tx_pending_pop(uint32_t *client)
-{
-    /* This should only be called when length > 0 */
-    assert(tx_pending_length());
-
-    *client = tx_pending.queue[tx_pending.head];
-    tx_pending.clients_pending[*client] = false;
-    tx_pending.head++;
+/* Need to come up with a replacement for this clear cache function. Might be worth testing just flushing the entire l1 cache, but might cause issues with returning to this file*/
+void cml_clear() {
+    microkit_dbg_puts("Trying to clear cache\n");
 }
 
-bool process_tx_queue(uint32_t client)
-{
-    serial_queue_handle_t *handle = &tx_queue_handle_cli[client];
-
-    if (serial_queue_empty(handle, handle->queue->head)) {
-        serial_request_producer_signal(handle);
-        return false;
-    }
-
-    uint32_t length = serial_queue_length(handle);
-#if SERIAL_WITH_COLOUR
-    length += COLOUR_START_START_LEN + MAX_COLOURS_LEN + COLOUR_START_END_LEN;
-#endif
-
-    /* Not enough space to transmit string to virtualiser. Continue later */
-    if (length > serial_queue_free(&tx_queue_handle_drv)) {
-        tx_pending_push(client);
-
-        /* Request signal from the driver when data has been consumed */
-        serial_request_consumer_signal(&tx_queue_handle_drv);
-
-        /* Cancel further signals from this client */
-        serial_cancel_producer_signal(handle);
-        return false;
-    }
-
-#if SERIAL_WITH_COLOUR
-    char colour_start_buff[COLOUR_START_START_LEN + MAX_COLOURS_LEN + COLOUR_START_END_LEN + 1];
-    sddf_sprintf(colour_start_buff, "%s%u%s", COLOUR_START_START, client % MAX_COLOURS, COLOUR_START_END);
-    serial_transfer_all_with_colour(handle, &tx_queue_handle_drv, colour_start_buff, COLOUR_END);
-#else
-    serial_transfer_all(handle, &tx_queue_handle_drv);
-#endif
-    serial_request_producer_signal(handle);
-    return true;
+void init_pancake_mem() {
+    unsigned long sz = 1024*2;
+    unsigned long cml_heap_sz = sz;
+    unsigned long cml_stack_sz = sz;
+    cml_heap = cml_memory;
+    cml_stack = cml_heap + cml_heap_sz;
+    cml_stackend = cml_stack + cml_stack_sz;
 }
 
-void tx_return(void)
-{
-    uint32_t num_pending_tx = tx_pending_length();
-    if (!num_pending_tx) {
-        return;
-    }
+void init_pancake_data() {
+    uintptr_t* heap = (uintptr_t*) cml_heap;
+    heap[5] = (uintptr_t) tx_queue_drv;
+    heap[6] = (uintptr_t) tx_queue_cli0;
+    heap[7] = (uintptr_t) tx_data_drv;
+    heap[8] = (uintptr_t) tx_data_cli0;
 
-    uint32_t client;
-    bool transferred = false;
-    for (uint32_t req = 0; req < num_pending_tx; req++) {
-        tx_pending_pop(&client);
-        bool reprocess = true;
-        bool client_transferred = false;
-        while (reprocess) {
-            client_transferred |= process_tx_queue(client);
-            reprocess = false;
-
-            /* If more data is available, re-process unless it has been pushed to pending transmits */
-            if (!serial_queue_empty(&tx_queue_handle_cli[client], tx_queue_handle_cli[client].queue->head)
-                && !tx_pending.clients_pending[client]) {
-                serial_cancel_producer_signal(&tx_queue_handle_cli[client]);
-                reprocess = true;
-            }
-        }
-        transferred |= client_transferred;
-    }
-
-    if (transferred && serial_require_producer_signal(&tx_queue_handle_drv)) {
-        serial_cancel_producer_signal(&tx_queue_handle_drv);
-        microkit_notify_delayed(DRIVER_CH);
-    }
-}
-
-void tx_provide(microkit_channel ch)
-{
-    if (ch > SERIAL_NUM_CLIENTS) {
-        sddf_dprintf("VIRT_TX|LOG: Received notification from unkown channel %u\n", ch);
-        return;
-    }
-
-    uint32_t active_client = ch - CLIENT_OFFSET;
-    bool transferred = false;
-    bool reprocess = true;
-    while (reprocess) {
-        transferred |= process_tx_queue(active_client);
-        reprocess = false;
-
-        /* If more data is available, re-process unless it has been pushed to pending transmits */
-        if (!serial_queue_empty(&tx_queue_handle_cli[active_client], tx_queue_handle_cli[active_client].queue->head)
-            && !tx_pending.clients_pending[active_client]) {
-            serial_cancel_producer_signal(&tx_queue_handle_cli[active_client]);
-            reprocess = true;
-        }
-    }
-
-    if (transferred && serial_require_producer_signal(&tx_queue_handle_drv)) {
-        serial_cancel_producer_signal(&tx_queue_handle_drv);
-        microkit_notify_delayed(DRIVER_CH);
-    }
+    tx_queue_handle_drv = (serial_queue_handle_t *) &heap[10];
+    tx_queue_handle_cli = (serial_queue_handle_t *) &heap[13];
+    tx_pending = (tx_pending_t *) &heap[13 + SERIAL_NUM_CLIENTS * sizeof(serial_queue_handle_t) / sizeof(uintptr_t)];
 }
 
 void init(void)
 {
-    serial_queue_init(&tx_queue_handle_drv, tx_queue_drv, SERIAL_TX_DATA_REGION_SIZE_DRIV, tx_data_drv);
+    init_pancake_mem();
+    init_pancake_data();
+    serial_queue_init(tx_queue_handle_drv, tx_queue_drv, SERIAL_TX_DATA_REGION_SIZE_DRIV, tx_data_drv);
     serial_virt_queue_init_sys(microkit_name, tx_queue_handle_cli, tx_queue_cli0, tx_data_cli0);
 
 #if !SERIAL_TX_ONLY
     /* Print a deterministic string to allow console input to begin */
-    sddf_memcpy(tx_queue_handle_drv.data_region, SERIAL_CONSOLE_BEGIN_STRING, SERIAL_CONSOLE_BEGIN_STRING_LEN);
-    serial_update_visible_tail(&tx_queue_handle_drv, SERIAL_CONSOLE_BEGIN_STRING_LEN);
+    sddf_memcpy(tx_queue_handle_drv->data_region, SERIAL_CONSOLE_BEGIN_STRING, SERIAL_CONSOLE_BEGIN_STRING_LEN);
+    serial_update_visible_tail(tx_queue_handle_drv, SERIAL_CONSOLE_BEGIN_STRING_LEN);
     microkit_notify(DRIVER_CH);
 #endif
 
 #if SERIAL_WITH_COLOUR
     serial_channel_names_init(clients_colours);
-    for (uint32_t i = 0; i < SERIAL_NUM_CLIENTS; i++) {
-        sddf_dprintf("%s%u%s%s is client %u%s\n", COLOUR_START_START, i % MAX_COLOURS, COLOUR_START_END, clients_colours[i], i,
+    for (uint64_t i = 0; i < SERIAL_NUM_CLIENTS; i++) {
+        sddf_dprintf("%s%lu%s%s is client %lu%s\n", COLOUR_START_START, i % MAX_COLOURS, COLOUR_START_END, clients_colours[i], i,
                      COLOUR_END);
     }
 #endif
+    cml_main();
 }
 
 void notified(microkit_channel ch)
 {
-    switch (ch) {
-    case DRIVER_CH:
-        tx_return();
-        break;
-    default:
-        tx_provide(ch);
-        break;
-    }
+    pnk_notified(ch);
 }

@@ -3,7 +3,7 @@
 # Copyright 2024, UNSW
 #
 # SPDX-License-Identifier: BSD-2-Clause
-#  
+#
 # Include this snippet in your project Makefile to build
 # sddf_libutil.a and sddf_libutil_debug.a
 # sddf_libutil.a needs access to the serial device, and
