@@ -123,12 +123,6 @@ void tx_return(void)
     }
 }
 
-void notified(microkit_channel ch)
-{
-    tx_return();
-    tx_provide();
-}
-
 void init(void)
 {
     net_queue_init(&state.tx_queue_drv, (net_queue_t *)tx_free_drv, (net_queue_t *)tx_active_drv, NET_TX_QUEUE_SIZE_DRIV);
@@ -140,5 +134,11 @@ void init(void)
     state.buffer_region_paddrs[0] = buffer_data_region_cli0_paddr;
     state.buffer_region_paddrs[1] = buffer_data_region_cli1_paddr;
 
+    tx_provide();
+}
+
+void notified(microkit_channel ch)
+{
+    tx_return();
     tx_provide();
 }

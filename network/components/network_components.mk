@@ -42,8 +42,22 @@ ${NETWORK_COMPONENT_OBJ}: |network/components
 ${NETWORK_COMPONENT_OBJ}: ${CHECK_NETWORK_FLAGS_MD5}
 ${NETWORK_COMPONENT_OBJ}: CFLAGS+=${CFLAGS_network}
 
-network/components/network_virt_%.o: ${SDDF}/network/components/virt_%.c 
+network/components/network_virt_%.o: ${SDDF}/network/components/virt_%.c
 	${CC} ${CFLAGS} -c -o $@ $<
+
+COPY_PNK = ${UTIL}/util.🥞 \
+	${NETWORK_QUEUE_INCLUDE}/queue_helper.🥞 \
+	${NETWORK_QUEUE_INCLUDE}/queue.🥞 \
+	${SDDF}/network/components/copy.🥞
+
+copy_pnk.o: copy_pnk.S
+	$(CC) -c -mcpu=$(CPU) $< -o $@
+
+copy_pnk.S: $(COPY_PNK)
+	cat $(COPY_PNK) | cpp -P | $(CAKE_COMPILER) --target=arm8 --pancake --main_return=true > $@
+
+copy.elf: copy_pnk.o copy.o pancake_ffi.o
+	$(LD) $(LDFLAGS) $^ $(LIBS) -o $@
 
 %.elf: network/components/%.o
 	${LD} ${LDFLAGS} -o $@ $< ${LIBS}

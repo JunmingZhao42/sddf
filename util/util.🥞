@@ -1,3 +1,12 @@
+////////////////////////////////////////
+// Constants
+#define ETH_HWADDR_LEN 6
+#define NETIF_SIZE 1
+#define LWIP_STATE_SIZE 20
+#define NET_BUFFER_SIZE 2048
+#define NUM_NETWORK_CLIENTS 2
+
+////////////////////////////////////////
 #define CHAR_MASK 255
 #define MASK_HW 65535
 #define UINT32_MAX 4294967295

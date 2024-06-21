@@ -1,0 +1,14 @@
+#define DRIVER 0
+#define CLIENT_CH 1
+
+fun main() {
+    return 0;
+}
+
+export fun extract_offset(1 phys) {
+    var client = 0;
+    while (client < NUM_NETWORK_CLIENTS) {
+        client = client + 1;
+    }
+    return -1;
+}

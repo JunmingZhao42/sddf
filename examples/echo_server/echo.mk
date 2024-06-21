@@ -21,6 +21,7 @@ NETWORK_COMPONENTS:=$(SDDF)/network/components
 NUM_NETWORK_CLIENTS:=-DNUM_NETWORK_CLIENTS=2
 SERIAL_NUM_CLIENTS:=-DSERIAL_NUM_CLIENTS=3
 
+NETWORK_QUEUE_INCLUDE := ${SDDF}/include/sddf/network
 BOARD_DIR := $(MICROKIT_SDK)/board/$(MICROKIT_BOARD)/$(MICROKIT_CONFIG)
 SYSTEM_FILE := ${ECHO_SERVER}/board/$(MICROKIT_BOARD)/echo_server.system
 IMAGE_FILE := loader.img
@@ -56,6 +57,17 @@ ${CHECK_FLAGS_BOARD_MD5}:
 	-rm -f .board_cflags-*
 	touch $@
 
+LWIP_PNK = ${UTIL}/util.🥞 \
+		${NETWORK_QUEUE_INCLUDE}/queue_helper.🥞 \
+		${NETWORK_QUEUE_INCLUDE}/queue.🥞 \
+		${ECHO_SERVER}/lwip.🥞
+
+lwip_pnk.S: $(LWIP_PNK)
+	cat $(LWIP_PNK) | cpp -P | $(CAKE_COMPILER) --target=arm8 --pancake --main_return=true > $@
+
+lwip_pnk.o: lwip_pnk.S
+	$(CC) -c -mcpu=$(CPU) $< -o $@
+
 %.elf: %.o
 	$(LD) $(LDFLAGS) $< $(LIBS) -o $@
 
@@ -67,7 +79,7 @@ NETIFFILES:=$(LWIPDIR)/netif/ethernet.c
 
 # LWIPFILES: All the above.
 LWIPFILES=lwip.c $(COREFILES) $(CORE4FILES) $(NETIFFILES)
-LWIP_OBJS := $(LWIPFILES:.c=.o) lwip.o utilization_socket.o \
+LWIP_OBJS := $(LWIPFILES:.c=.o) lwip_pnk.o lwip.o utilization_socket.o \
 	     udp_echo_socket.o tcp_echo_socket.o
 
 OBJS := $(LWIP_OBJS)
@@ -76,7 +88,7 @@ DEPS := $(filter %.d,$(OBJS:.o=.d))
 all: loader.img
 
 ${LWIP_OBJS}: ${CHECK_FLAGS_BOARD_MD5}
-lwip.elf: $(LWIP_OBJS) libsddf_util.a
+lwip.elf: $(LWIP_OBJS) libsddf_util.a pancake_ffi.o
 	$(LD) $(LDFLAGS) $^ $(LIBS) -o $@
 
 LWIPDIRS := $(addprefix ${LWIPDIR}/, core/ipv4 netif api)

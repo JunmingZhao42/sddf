@@ -1,0 +1,111 @@
+#define SERIAL_TX_CH 0
+#define TIMER  1
+#define RX_CH  2
+#define TX_CH  3
+
+#define LWIP_TICK_MS 100
+#define NUM_PBUFFS 512
+
+#define ERR_OK 0
+
+#define get_rx_free(rx_free)                    \
+    var rx_data_addr = @base + WORD_SIZE * 5;   \
+    var rx_data = lds {1} rx_data_addr;         \
+
+#define get_rx_active(rx_active)                \
+    var rx_active_addr = @base + WORD_SIZE * 6; \
+    var rx_active = lds {1} rx_active_addr;     \
+
+#define get_tx_free(tx_free)                    \
+    var tx_data_addr = @base + WORD_SIZE * 7;   \
+    var tx_data = lds {1} tx_data_addr;         \
+
+#define get_tx_active(rx_active)                \
+    var tx_active_addr = @base + WORD_SIZE * 8; \
+    var tx_active = lds {1} tx_active_addr;     \
+
+#define get_rx_buffer_data_region(rx_buffer_data_region) \
+    var addr = @base + WORD_SIZE * 9;                    \
+    var rx_buffer_data_region = lds {1} addr;            \
+
+#define get_tx_buffer_data_region(tx_buffer_data_region) \
+    var addr = @base + WORD_SIZE * 10;                    \
+    var tx_buffer_data_region = lds {1} addr;            \
+
+#define get_uart_base(uart_base)                    \
+    var uart_base_addr = @base + WORD_SIZE * 11;    \
+    var uart_base = lds {1} uart_base_addr;         \
+
+#define get_serial_tx_queue_handle(serial_tx_queue_handle) \
+    var addr = @base + WORD_SIZE * 12; \
+    var serial_tx_queue_handle = lds {1} addr; \
+
+#define get_rx_queue_handle(rx_queue_handle) \
+    var addr = @base + WORD_SIZE * 15; \
+    var rx_queue_handle = lds {1} addr; \
+
+#define get_tx_queue_handle(tx_queue_handle) \
+    var addr = @base + WORD_SIZE * 18; \
+    var tx_queue_handle = lds {1} addr; \
+
+#define get_state_head(head) \
+    var addr = @base + WORD_SIZE * 21; \
+    var head = lds {1} addr; \
+
+#define set_state_head(head) \
+    var addr = @base + WORD_SIZE * 21; \
+    stw addr, head; \
+
+#define get_state_tail(tail) \
+    var addr = @base + WORD_SIZE * 22; \
+    var tail = lds {1} addr; \
+
+#define set_state_tail(tail) \
+    var addr = @base + WORD_SIZE * 22; \
+    stw addr, tail; \
+
+/*
+typedef struct state {
+    struct netif netif;
+    uint8_t mac[ETH_HWADDR_LEN];
+    net_queue_handle_t rx_queue;
+    net_queue_handle_t tx_queue;
+    struct pbuf *head;
+    struct pbuf *tail;
+} state_t;
+*/
+
+
+fun main() {
+    return 0;
+}
+
+export fun pnk_receive() {
+    var reprocess = true;
+
+    while (reprocess) {
+        get_rx_queue_handle(rx_queue_handle)
+        while (true) {
+            net_queue_empty_active(empty, rx_queue_handle)
+            if (empty) {
+                break;
+            }
+
+            var buffer_addr = FUNC_BASE;
+            var {1} err = net_dequeue_active(rx_queue_handle, buffer_addr);
+            assert(err)
+        }
+        break;
+    }
+    return 0;
+}
+
+fun pnk_enqueue_pbufs(1 p) {
+    get_tx_queue_handle(tx_queue_handle)
+    net_request_signal_free(tx_queue_handle)
+
+    get_state_head(head)
+    if (head == 0) {
+        set_state_head(p)
+    }
+}
