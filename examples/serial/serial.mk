@@ -96,7 +96,10 @@ include ${SERIAL_COMPONENTS}/serial_components.mk
 %.elf: %.o
 	${LD} -o $@ ${LDFLAGS} $< ${LIBS}
 
-SERVER_PNK = ${UTIL}/util.🥞 ${SERIAL_QUEUE_INCLUDE}/queue_helper.🥞 ${SERIAL_QUEUE_INCLUDE}/queue.🥞 ${TOP}/server.🥞 ${UTIL}/putchar_s.🥞
+SERVER_PNK = ${UTIL}/util.🥞 \
+			${SERIAL_QUEUE_INCLUDE}/queue_helper.🥞 \
+			${SERIAL_QUEUE_INCLUDE}/queue.🥞 \
+			${TOP}/server.🥞 ${UTIL}/putchar_s.🥞
 
 server_pnk.o: server_pnk.S
 	$(CC) -c -mcpu=$(CPU) $< -o $@

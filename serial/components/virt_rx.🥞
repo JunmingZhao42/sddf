@@ -120,8 +120,7 @@ fun rx_return() {
                 } else {
                     get_current_client(curr_c)
                     get_rx_queue_handle_cli_i(qhandle, curr_c)
-                    var eq = 0;
-                    eq = serial_enqueue(qhandle, local_tail_addr, c);
+                    var 1 eq = serial_enqueue(qhandle, local_tail_addr, c);
                     if (eq == 0) {
                         transferred = true;
                     }
@@ -138,8 +137,7 @@ fun rx_return() {
                     if (c == SERIAL_SWITCH_CHAR) {
                         get_current_client(curr_c)
                         get_rx_queue_handle_cli_i(qhandle, curr_c)
-                        var eq = 0;
-                        eq = serial_enqueue(qhandle, local_tail_addr, c);
+                        var 1 eq = serial_enqueue(qhandle, local_tail_addr, c);
                         if (eq == 0) {
                             transferred = true;
                         }
@@ -151,8 +149,7 @@ fun rx_return() {
                 get_next_client_addr(next_client)
                 c = ld8 c_addr;
                 if (c == SERIAL_TERMINATE_NUM) {
-                    var input_number = 0;
-                    input_number = pnk_atoi(next_client);
+                    var 1 input_number = pnk_atoi(next_client);
                     if ((input_number >= 0) && (input_number < SERIAL_NUM_CLIENTS)) {
                         get_current_client(curr_c)
                         get_rx_queue_handle_cli_i(qhandle, curr_c)

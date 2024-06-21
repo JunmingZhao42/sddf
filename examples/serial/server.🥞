@@ -53,11 +53,10 @@ export fun pnk_notified(1 channel) {
     var reprocess = true;
     var c_addr = FUNC_BASE;
     while (reprocess) {
-        var dq_ret = 0;
         get_rx_queue_handle(rx_queue_handle)
         get_queue(queue, rx_queue_handle)
         var head_addr = queue + WORD_SIZE;
-        dq_ret = serial_dequeue(rx_queue_handle, head_addr, c_addr);
+        var 1 dq_ret = serial_dequeue(rx_queue_handle, head_addr, c_addr);
         while (dq_ret == 0) {
             var c = (lds {1} c_addr) & CHAR_MASK;
             if (c == 13) { // '\r'

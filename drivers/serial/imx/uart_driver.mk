@@ -12,7 +12,11 @@
 UART_DRIVER_DIR := $(dir $(lastword $(MAKEFILE_LIST)))
 SERIAL_QUEUE_INCLUDE := ${SDDF}/include/sddf/serial
 
-DRIVER_PNK = ${UTIL}/util.🥞 ${SERIAL_QUEUE_INCLUDE}/queue_helper.🥞 ${SERIAL_QUEUE_INCLUDE}/queue.🥞 ${UART_DRIVER_DIR}/uart_helper.🥞 ${UART_DRIVER_DIR}/uart.🥞
+DRIVER_PNK = ${UTIL}/util.🥞 \
+	${SERIAL_QUEUE_INCLUDE}/queue_helper.🥞 \
+	${SERIAL_QUEUE_INCLUDE}/queue.🥞 \
+	${UART_DRIVER_DIR}/uart_helper.🥞 \
+	${UART_DRIVER_DIR}/uart.🥞
 
 uart_pnk.o: uart_pnk.S
 	$(CC) -c -mcpu=$(CPU) $< -o $@
