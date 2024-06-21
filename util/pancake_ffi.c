@@ -3,6 +3,7 @@
 #include <microkit.h>
 #include <sddf/util/fence.h>
 #include <sddf/util/util.h>
+#include <sddf/util/cache.h>
 
 void print_address(void* addr) {
     char buf[16];
@@ -38,6 +39,7 @@ void print_int(int num) {
 
     if (num == 0) {
         microkit_dbg_putc('0');
+        microkit_dbg_putc('\n');
         return;
     }
 
@@ -52,12 +54,12 @@ void print_int(int num) {
     while (i > 0) {
         microkit_dbg_putc(buf[--i]);
     }
+    microkit_dbg_putc('\n');
 }
 
 void ffiprint_int(unsigned char *c, long clen, unsigned char *a, long alen) {
-    microkit_dbg_puts("FFI print int:\n");
+    microkit_dbg_puts("\nFFI print int:\n");
     print_int(clen);
-    microkit_dbg_putc(',');
     print_int(alen);
     microkit_dbg_putc('\n');
 }
@@ -94,9 +96,16 @@ void ffiprint_address(unsigned char *c, long clen, unsigned char *a, long alen) 
     * c: memory address
     * a: memory address
 */
-void ffitransfer_hw(unsigned char *c, long clen, unsigned char *a, long alen) {
+void ffitransfer32(unsigned char *c, long clen, unsigned char *a, long alen) {
     uint32_t value = *(uint32_t *) c;
     *(uint32_t *) a = value;
+    // __sync_synchronize(); // TODO: not sure if we need this
+}
+
+void ffitransfer16(unsigned char *c, long clen, unsigned char *a, long alen) {
+    uint16_t value = *(uint16_t *) c;
+    *(uint16_t *) a = value;
+    // __sync_synchronize();
 }
 
 void ffifuncall(unsigned char *c, long clen, unsigned char *a, long alen) {
@@ -138,4 +147,12 @@ void ffimicrokit_irq_ack_delayed(unsigned char *c, long clen, unsigned char *a, 
 void ffimicrokit_notify_delayed(unsigned char *c, long clen, unsigned char *a, long alen) {
     // clen is the notification channel
     microkit_notify_delayed(clen);
+}
+
+void fficache_clean(unsigned char *c, long clen, unsigned char *a, long alen) {
+    cache_clean((unsigned long) c, (unsigned long) a);
+}
+
+void fficache_clean_and_invalidate(unsigned char *c, long clen, unsigned char *a, long alen) {
+    cache_clean_and_invalidate((unsigned long) c, (unsigned long) a);
 }

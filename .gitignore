@@ -16,3 +16,5 @@ cake-x64-64/
 *.S
 *.log
 examples/serial/temp.🥞
+examples/echo_server/temp.🥞
+clean.sh

@@ -35,6 +35,7 @@ _Static_assert((RX_COUNT + TX_COUNT) * 2 * NET_BUFFER_SIZE <= NET_DATA_REGION_SI
                "Expect rx+tx buffers to fit in single 2MB page");
 
 /* HW ring descriptor (shared with device) */
+// NOTE: this is just one word
 struct descriptor {
     uint16_t len;
     uint16_t stat;
@@ -43,198 +44,71 @@ struct descriptor {
 
 /* HW ring buffer data type */
 typedef struct {
-    unsigned int tail; /* index to insert at */
-    unsigned int head; /* index to remove from */
+    uint64_t tail; /* index to insert at */
+    uint64_t head; /* index to remove from */
     net_buff_desc_t descr_mdata[MAX_COUNT]; /* associated meta data array */
     volatile struct descriptor *descr; /* buffer descripter array */
 } hw_ring_t;
 
-hw_ring_t rx; /* Rx NIC ring */
-hw_ring_t tx; /* Tx NIC ring */
+hw_ring_t *hw_ring_rx; /* Rx NIC ring */
+hw_ring_t *hw_ring_tx; /* Tx NIC ring */
 
-net_queue_handle_t rx_queue;
-net_queue_handle_t tx_queue;
+net_queue_handle_t *rx_queue;
+net_queue_handle_t *tx_queue;
 
 #define MAX_PACKET_SIZE     1536
 
 volatile struct enet_regs *eth;
-uint32_t irq_mask = IRQ_MASK;
+uint64_t *irq_mask;
 
-static inline bool hw_ring_full(hw_ring_t *ring, size_t ring_size)
-{
-    return !((ring->tail - ring->head + 1) % ring_size);
+static char cml_memory[1024*12];
+extern void *cml_heap;
+extern void *cml_stack;
+extern void *cml_stackend;
+
+extern void cml_main(void);
+extern void pnk_notified(microkit_channel ch);
+
+void cml_exit(int arg) {
+    microkit_dbg_puts("ERROR! We should not be getting here\n");
 }
 
-static inline bool hw_ring_empty(hw_ring_t *ring, size_t ring_size)
-{
-    return !((ring->tail - ring->head) % ring_size);
+void cml_err(int arg) {
+    if (arg == 3) {
+        microkit_dbg_puts("Memory not ready for entry. You may have not run the init code yet, or be trying to enter during an FFI call.\n");
+    }
+  cml_exit(arg);
 }
 
-static void update_ring_slot(hw_ring_t *ring, unsigned int idx, uintptr_t phys,
-                             uint16_t len, uint16_t stat)
-{
-    volatile struct descriptor *d = &(ring->descr[idx]);
-    d->addr = phys;
-    d->len = len;
-
-    /* Ensure all writes to the descriptor complete, before we set the flags
-     * that makes hardware aware of this slot.
-     */
-    __sync_synchronize();
-    d->stat = stat;
+/* Need to come up with a replacement for this clear cache function. Might be worth testing just flushing the entire l1 cache, but might cause issues with returning to this file*/
+void cml_clear() {
+    microkit_dbg_puts("Trying to clear cache\n");
 }
 
-static inline void enable_irqs(uint32_t mask)
-{
-    eth->eimr = mask;
-    irq_mask = mask;
+void init_pancake_mem() {
+    unsigned long cml_heap_sz = 1024*10;
+    unsigned long cml_stack_sz = 1024*2;
+    cml_heap = cml_memory;
+    cml_stack = cml_heap + cml_heap_sz;
+    cml_stackend = cml_stack + cml_stack_sz;
 }
 
-static void rx_provide(void)
-{
-    bool reprocess = true;
-    while (reprocess) {
-        while (!hw_ring_full(&rx, RX_COUNT) && !net_queue_empty_free(&rx_queue)) {
-            net_buff_desc_t buffer;
-            int err = net_dequeue_free(&rx_queue, &buffer);
-            assert(!err);
-
-            uint16_t stat = RXD_EMPTY;
-            if (rx.tail + 1 == RX_COUNT) {
-                stat |= WRAP;
-            }
-            rx.descr_mdata[rx.tail] = buffer;
-            update_ring_slot(&rx, rx.tail, buffer.io_or_offset, 0, stat);
-            rx.tail = (rx.tail + 1) % RX_COUNT;
-        }
-
-        /* Only request a notification from virtualiser if HW ring not full */
-        if (!hw_ring_full(&rx, RX_COUNT)) {
-            net_request_signal_free(&rx_queue);
-        } else {
-            net_cancel_signal_free(&rx_queue);
-        }
-        reprocess = false;
-
-        if (!net_queue_empty_free(&rx_queue) && !hw_ring_full(&rx, RX_COUNT)) {
-            net_cancel_signal_free(&rx_queue);
-            reprocess = true;
-        }
-    }
-
-    if (!(hw_ring_empty(&rx, RX_COUNT))) {
-        /* Ensure rx IRQs are enabled */
-        eth->rdar = RDAR_RDAR;
-        if (!(irq_mask & NETIRQ_RXF)) {
-            enable_irqs(IRQ_MASK);
-        }
-    } else {
-        enable_irqs(NETIRQ_TXF | NETIRQ_EBERR);
-    }
-}
-
-static void rx_return(void)
-{
-    bool packets_transferred = false;
-    while (!hw_ring_empty(&rx, RX_COUNT)) {
-        /* If buffer slot is still empty, we have processed all packets the device has filled */
-        volatile struct descriptor *d = &(rx.descr[rx.head]);
-        if (d->stat & RXD_EMPTY) {
-            break;
-        }
-
-        net_buff_desc_t buffer = rx.descr_mdata[rx.head];
-        buffer.len = d->len;
-        int err = net_enqueue_active(&rx_queue, buffer);
-        assert(!err);
-
-        packets_transferred = true;
-        rx.head = (rx.head + 1) % RX_COUNT;
-    }
-
-    if (packets_transferred && net_require_signal_active(&rx_queue)) {
-        net_cancel_signal_active(&rx_queue);
-        microkit_notify(RX_CH);
-    }
-}
-
-static void tx_provide(void)
-{
-    bool reprocess = true;
-    while (reprocess) {
-        while (!(hw_ring_full(&tx, TX_COUNT)) && !net_queue_empty_active(&tx_queue)) {
-            net_buff_desc_t buffer;
-            int err = net_dequeue_active(&tx_queue, &buffer);
-            assert(!err);
-
-            uint16_t stat = TXD_READY | TXD_ADDCRC | TXD_LAST;
-            if (tx.tail + 1 == TX_COUNT) {
-                stat |= WRAP;
-            }
-            tx.descr_mdata[tx.tail] = buffer;
-            update_ring_slot(&tx, tx.tail, buffer.io_or_offset, buffer.len, stat);
-
-            tx.tail = (tx.tail + 1) % TX_COUNT;
-            if (!(eth->tdar & TDAR_TDAR)) {
-                eth->tdar = TDAR_TDAR;
-            }
-        }
-
-        net_request_signal_active(&tx_queue);
-        reprocess = false;
-
-        if (!hw_ring_full(&tx, TX_COUNT) && !net_queue_empty_active(&tx_queue)) {
-            net_cancel_signal_active(&tx_queue);
-            reprocess = true;
-        }
-    }
-}
-
-static void tx_return(void)
-{
-    bool enqueued = false;
-    while (!hw_ring_empty(&tx, TX_COUNT)) {
-        /* Ensure that this buffer has been sent by the device */
-        volatile struct descriptor *d = &(tx.descr[tx.head]);
-        if (d->stat & TXD_READY) {
-            break;
-        }
-
-        net_buff_desc_t buffer = tx.descr_mdata[tx.head];
-        buffer.len = 0;
-
-        tx.head = (tx.head + 1) % TX_COUNT;
-
-        int err = net_enqueue_free(&tx_queue, buffer);
-        assert(!err);
-        enqueued = true;
-    }
-
-    if (enqueued && net_require_signal_free(&tx_queue)) {
-        net_cancel_signal_free(&tx_queue);
-        microkit_notify(TX_CH);
-    }
-}
-
-static void handle_irq(void)
-{
-    uint32_t e = eth->eir & irq_mask;
-    eth->eir = e;
-
-    while (e & irq_mask) {
-        if (e & NETIRQ_TXF) {
-            tx_return();
-        }
-        if (e & NETIRQ_RXF) {
-            rx_return();
-            rx_provide();
-        }
-        if (e & NETIRQ_EBERR) {
-            sddf_dprintf("ETH|ERROR: System bus/uDMA\n");
-        }
-        e = eth->eir & irq_mask;
-        eth->eir = e;
-    }
+void init_pancake_data() {
+    uintptr_t *heap = (uintptr_t *)cml_heap;
+    heap[5] = eth_regs;
+    heap[6] = hw_ring_buffer_vaddr;
+    heap[7] = hw_ring_buffer_paddr;
+    heap[8] = rx_free;
+    heap[9] = rx_active;
+    heap[10] = tx_free;
+    heap[11] = tx_active;
+    irq_mask = (uint64_t *) &heap[12];
+    *irq_mask = IRQ_MASK;
+    rx_queue = (net_queue_handle_t *) &heap[13];
+    tx_queue = (net_queue_handle_t *) &heap[16];
+    hw_ring_rx = (hw_ring_t *) &heap[19];
+    int offset = sizeof(hw_ring_t);
+    hw_ring_tx = (hw_ring_t *) ((char *) &heap[19] + offset);
 }
 
 static void eth_setup(void)
@@ -244,8 +118,8 @@ static void eth_setup(void)
     uint32_t h = eth->paur;
 
     /* Set up HW rings */
-    rx.descr = (volatile struct descriptor *)hw_ring_buffer_vaddr;
-    tx.descr = (volatile struct descriptor *)(hw_ring_buffer_vaddr + (sizeof(struct descriptor) * RX_COUNT));
+    hw_ring_rx->descr = (volatile struct descriptor *) hw_ring_buffer_vaddr;
+    hw_ring_tx->descr = (volatile struct descriptor *)(hw_ring_buffer_vaddr + (sizeof(struct descriptor) * RX_COUNT));
 
     /* Perform reset */
     eth->ecr = ECR_RESET;
@@ -320,34 +194,17 @@ static void eth_setup(void)
 
 void init(void)
 {
+    init_pancake_mem();
+    init_pancake_data();
     eth_setup();
 
-    net_queue_init(&rx_queue, (net_queue_t *)rx_free, (net_queue_t *)rx_active, NET_RX_QUEUE_SIZE_DRIV);
-    net_queue_init(&tx_queue, (net_queue_t *)tx_free, (net_queue_t *)tx_active, NET_TX_QUEUE_SIZE_DRIV);
+    net_queue_init(rx_queue, (net_queue_t *)rx_free, (net_queue_t *)rx_active, NET_RX_QUEUE_SIZE_DRIV);
+    net_queue_init(tx_queue, (net_queue_t *)tx_free, (net_queue_t *)tx_active, NET_TX_QUEUE_SIZE_DRIV);
 
-    rx_provide();
-    tx_provide();
+    cml_main();
 }
 
 void notified(microkit_channel ch)
 {
-    switch (ch) {
-    case IRQ_CH:
-        handle_irq();
-        /*
-         * Delay calling into the kernel to ack the IRQ until the next loop
-         * in the microkit event handler loop.
-         */
-        microkit_irq_ack_delayed(ch);
-        break;
-    case RX_CH:
-        rx_provide();
-        break;
-    case TX_CH:
-        tx_provide();
-        break;
-    default:
-        sddf_dprintf("ETH|LOG: received notification on unexpected channel: %u\n", ch);
-        break;
-    }
+    pnk_notified(ch);
 }

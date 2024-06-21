@@ -22,123 +22,85 @@ uintptr_t buffer_data_region_cli1_vaddr;
 uintptr_t buffer_data_region_cli0_paddr;
 uintptr_t buffer_data_region_cli1_paddr;
 
-typedef struct state {
-    net_queue_handle_t tx_queue_drv;
-    net_queue_handle_t tx_queue_clients[NUM_NETWORK_CLIENTS];
-    uintptr_t buffer_region_vaddrs[NUM_NETWORK_CLIENTS];
-    uintptr_t buffer_region_paddrs[NUM_NETWORK_CLIENTS];
-} state_t;
+net_queue_handle_t *tx_queue_drv;
+net_queue_handle_t *tx_queue_clients;
 
-state_t state;
+uintptr_t *buffer_region_vaddrs;
+uintptr_t *buffer_region_paddrs;
 
-int extract_offset(uintptr_t *phys)
-{
-    for (int client = 0; client < NUM_NETWORK_CLIENTS; client++) {
-        if (*phys >= state.buffer_region_paddrs[client] &&
-            *phys < state.buffer_region_paddrs[client] + state.tx_queue_clients[client].size * NET_BUFFER_SIZE) {
-            *phys = *phys - state.buffer_region_paddrs[client];
-            return client;
-        }
-    }
-    return -1;
+static char cml_memory[1024*4];
+
+extern void cml_main(void);
+extern void pnk_notified(microkit_channel ch);
+extern void tx_provide(void);
+extern void *cml_heap;
+extern void *cml_stack;
+extern void *cml_stackend;
+
+void cml_exit(int arg) {
+    microkit_dbg_puts("ERROR! We should not be getting here\n");
 }
 
-void tx_provide(void)
-{
-    bool enqueued = false;
-    for (int client = 0; client < NUM_NETWORK_CLIENTS; client++) {
-        bool reprocess = true;
-        while (reprocess) {
-            while (!net_queue_empty_active(&state.tx_queue_clients[client])) {
-                net_buff_desc_t buffer;
-                int err = net_dequeue_active(&state.tx_queue_clients[client], &buffer);
-                assert(!err);
-
-                if (buffer.io_or_offset % NET_BUFFER_SIZE ||
-                    buffer.io_or_offset >= NET_BUFFER_SIZE * state.tx_queue_clients[client].size) {
-                    sddf_dprintf("VIRT_TX|LOG: Client provided offset %lx which is not buffer aligned or outside of buffer region\n",
-                                 buffer.io_or_offset);
-                    err = net_enqueue_free(&state.tx_queue_clients[client], buffer);
-                    assert(!err);
-                    continue;
-                }
-
-                cache_clean(buffer.io_or_offset + state.buffer_region_vaddrs[client],
-                            buffer.io_or_offset + state.buffer_region_vaddrs[client] + buffer.len);
-
-                buffer.io_or_offset = buffer.io_or_offset + state.buffer_region_paddrs[client];
-                err = net_enqueue_active(&state.tx_queue_drv, buffer);
-                assert(!err);
-                enqueued = true;
-            }
-
-            net_request_signal_active(&state.tx_queue_clients[client]);
-            reprocess = false;
-
-            if (!net_queue_empty_active(&state.tx_queue_clients[client])) {
-                net_cancel_signal_active(&state.tx_queue_clients[client]);
-                reprocess = true;
-            }
-        }
+void cml_err(int arg) {
+    if (arg == 3) {
+        microkit_dbg_puts("Memory not ready for entry. You may have not run the init code yet, or be trying to enter during an FFI call.\n");
     }
-
-    if (enqueued && net_require_signal_active(&state.tx_queue_drv)) {
-        net_cancel_signal_active(&state.tx_queue_drv);
-        microkit_notify_delayed(DRIVER);
-    }
+  cml_exit(arg);
 }
 
-void tx_return(void)
-{
-    bool reprocess = true;
-    bool notify_clients[NUM_NETWORK_CLIENTS] = {false};
-    while (reprocess) {
-        while (!net_queue_empty_free(&state.tx_queue_drv)) {
-            net_buff_desc_t buffer;
-            int err = net_dequeue_free(&state.tx_queue_drv, &buffer);
-            assert(!err);
-
-            int client = extract_offset(&buffer.io_or_offset);
-            assert(client >= 0);
-
-            err = net_enqueue_free(&state.tx_queue_clients[client], buffer);
-            assert(!err);
-            notify_clients[client] = true;
-        }
-
-        net_request_signal_free(&state.tx_queue_drv);
-        reprocess = false;
-
-        if (!net_queue_empty_free(&state.tx_queue_drv)) {
-            net_cancel_signal_free(&state.tx_queue_drv);
-            reprocess = true;
-        }
-    }
-
-    for (int client = 0; client < NUM_NETWORK_CLIENTS; client++) {
-        if (notify_clients[client] && net_require_signal_free(&state.tx_queue_clients[client])) {
-            net_cancel_signal_free(&state.tx_queue_clients[client]);
-            microkit_notify(client + CLIENT_CH);
-        }
-    }
+// Need to come up with a replacement for this clear cache function. Might be worth testing just flushing the entire l1 cache, but might cause issues with returning to this file
+void cml_clear() {
+    microkit_dbg_puts("Trying to clear cache\n");
 }
 
-void notified(microkit_channel ch)
-{
-    tx_return();
-    tx_provide();
+void init_pancake_mem() {
+    unsigned long sz = 1024*2;
+    unsigned long cml_heap_sz = sz;
+    unsigned long cml_stack_sz = sz;
+    cml_heap = cml_memory;
+    cml_stack = cml_heap + cml_heap_sz;
+    cml_stackend = cml_stack + cml_stack_sz;
+}
+
+void init_pancake_data() {
+    uintptr_t *heap = (uintptr_t *)cml_heap;
+    heap[5] = tx_free_drv;
+    heap[6] = tx_active_drv;
+    heap[7] = tx_free_cli0;
+    heap[8] = tx_active_cli0;
+    heap[9] = tx_free_cli1;
+    heap[10] = tx_active_cli1;
+    heap[11] = buffer_data_region_cli0_vaddr;
+    heap[12] = buffer_data_region_cli1_vaddr;
+    heap[13] = buffer_data_region_cli0_paddr;
+    heap[14] = buffer_data_region_cli1_paddr;
+    tx_queue_drv = (net_queue_handle_t *) &heap[15];
+    tx_queue_clients = (net_queue_handle_t *) &heap[18];
+    int offset = sizeof(net_queue_handle_t) * NUM_NETWORK_CLIENTS;
+    buffer_region_vaddrs = (uintptr_t *) ((char *) &heap[18] + offset);
+    buffer_region_paddrs =  (uintptr_t *) (((char *) buffer_region_vaddrs) + sizeof(uintptr_t) * NUM_NETWORK_CLIENTS);
 }
 
 void init(void)
 {
-    net_queue_init(&state.tx_queue_drv, (net_queue_t *)tx_free_drv, (net_queue_t *)tx_active_drv, NET_TX_QUEUE_SIZE_DRIV);
-    net_virt_queue_init_sys(microkit_name, state.tx_queue_clients, tx_free_cli0, tx_active_cli0);
+    init_pancake_mem();
+    init_pancake_data();
 
-    net_mem_region_init_sys(microkit_name, state.buffer_region_vaddrs, buffer_data_region_cli0_vaddr);
+    net_queue_init(tx_queue_drv, (net_queue_t *)tx_free_drv, (net_queue_t *)tx_active_drv, NET_TX_QUEUE_SIZE_DRIV);
+    net_virt_queue_init_sys(microkit_name, tx_queue_clients, tx_free_cli0, tx_active_cli0);
+
+    net_mem_region_init_sys(microkit_name, buffer_region_vaddrs, buffer_data_region_cli0_vaddr);
 
     /* CDTODO: Can we make this system agnostic? */
-    state.buffer_region_paddrs[0] = buffer_data_region_cli0_paddr;
-    state.buffer_region_paddrs[1] = buffer_data_region_cli1_paddr;
+    buffer_region_paddrs[0] = buffer_data_region_cli0_paddr;
+    buffer_region_paddrs[1] = buffer_data_region_cli1_paddr;
+
+    cml_main();
 
     tx_provide();
+}
+
+void notified(microkit_channel ch)
+{
+    pnk_notified(ch);
 }

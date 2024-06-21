@@ -1,0 +1,213 @@
+/*
+* Copyright 2022, UNSW
+* SPDX-License-Identifier: BSD-2-Clause
+*/
+/* The reference manual used to acquire these values is:
+*
+* i.MX 8M Mini Applications Processor Reference Manual.
+* Document number: IMX8MMRM.
+* Rev. 3, 11/2020.
+*
+* The ethernet device is described in section 11.5.
+*/
+
+#define ECR_RESET       (1)
+#define ECR_DBSWP       (1 << 8) /* descriptor byte swapping enable */
+#define MIBC_DIS        (1 << 31)
+#define MIBC_IDLE       (1 << 30)
+#define MIBC_CLEAR      (1 << 29)
+#define TIPG            8
+#define RACC_LINEDIS    (1 << 6) /* Discard frames with MAC layer errors */
+#define RCR_MII_MODE    (1 << 2) /* This field must always be set */
+#define RCR_RGMII_EN    (1 << 6) /* RGMII  Mode Enable. RMII must not be set */
+#define RCR_PROMISCUOUS (1 << 3) /* Accept all frames regardless of address matching */
+#define ECR_ETHEREN     2
+#define ECR_SPEED       (1 << 5) /* Enable 1000Mbps */
+#define PAUSE_OPCODE_FIELD (1 << 16)
+#define TCR_FDEN        (1 << 2) /* Fl duplex enable */
+#define ICEN            (1 << 31) /* enable irq coalescence */
+
+/*
+* Section 11.5.5.1 - Interrupt Event Register (ENET_EIR)
+* Page 3776.
+*/
+#define NETIRQ_BABR     (1 << 30) /* Babbling Receive Error          */
+#define NETIRQ_BABT     (1 << 29) /* Babbling Transmit Error         */
+#define NETIRQ_GRA      (1 << 28) /* Gracef Stop Complete          */
+#define NETIRQ_TXF      (1 << 27) /* Transmit Frame Interrupt        */
+#define NETIRQ_TXB      (1 << 26) /* Transmit Buffer Interrupt       */
+#define NETIRQ_RXF      (1 << 25) /* Receive Frame Interrupt         */
+#define NETIRQ_RXB      (1 << 24) /* Receive Buffer Interrupt        */
+#define NETIRQ_MII      (1 << 23) /* MII Interrupt                   */
+#define NETIRQ_EBERR    (1 << 22) /* Ethernet bus error              */
+#define NETIRQ_LC       (1 << 21) /* Late Collision                  */
+#define NETIRQ_RL       (1 << 20) /* Collision Retry Limit           */
+#define NETIRQ_UN       (1 << 19) /* Transmit FIFO Underrun          */
+#define NETIRQ_PLR      (1 << 18) /* Payload Receive Error           */
+#define NETIRQ_WAKEUP   (1 << 17) /* Node Wakeup Request Indication  */
+#define NETIRQ_TS_AVAIL (1 << 16) /* Transmit Timestamp Available    */
+#define NETIRQ_TS_TIMER (1 << 15) /* Timestamp Timer                 */
+
+#define IRQ_MASK        (NETIRQ_RXF | NETIRQ_TXF | NETIRQ_EBERR)
+
+#define RXD_EMPTY       (1 << 15)
+#define WRAP            (1 << 13)
+#define TXD_READY       (1 << 15)
+#define TXD_ADDCRC      (1 << 10)
+#define TXD_LAST        (1 << 11)
+
+
+#define RDAR_RDAR       (1 << 24) /* RX descriptor active */
+#define TDAR_TDAR       (1 << 24) /* TX descriptor active */
+
+#define TACC_IPCHK      (1 << 3) /* If an IP frame is transmitted, the checksum is inserted automatically */
+#define TACC_PROCHK     (1 << 4)
+
+#define STRFWD          (1 << 8) /* Store forward must be enabled for checksums. */
+
+#define RACC_IPDIS      (1 << 1) /* check the IP checksum and discard if wrong. */
+#define RACC_PRODIS     (1 << 2) /* check protocol checksum and discard if wrong. */
+
+#define ICFT(x)       (((x) & 0xff) << 20)
+#define RCR_MAX_FL(x) (((x) & 0x3fff) << 16) /* Maximum Frame Length */
+
+/* The ENET memory map can be found in Section 11.5.5
+struct enet_regs {
+    // Configuration
+    uint32_t res0[1];
+    uint32_t eir;    // 004 Interrupt Event Register
+    uint32_t eimr;   // 008 Interrupt Mask Register
+    uint32_t res1[1];
+    uint32_t rdar;   // 010 Receive Descriptor Active Register
+    uint32_t tdar;   // 014 Transmit Descriptor Active Register
+    uint32_t res2[3];
+    uint32_t ecr;    // 024 Ethernet Control Register
+    uint32_t res3[6];
+    uint32_t mmfr;   // 040 MII Management Frame Register
+    uint32_t mscr;   // 044 MII Speed Control Register
+    uint32_t res4[7];
+    uint32_t mibc;   // 064 MIB Control Register
+    uint32_t res5[7];
+    uint32_t rcr;    // 084 Receive Control Register
+    uint32_t res6[15];
+    uint32_t tcr;    // 0C4 Transmit Control Register
+    uint32_t res7[7];
+    uint32_t palr;   // 0E4 Physical Address Lower Register
+    uint32_t paur;   // 0E8 Physical Address Upper Register
+    uint32_t opd;    // 0EC Opcode/Pause Duration Register
+    uint32_t txic0;  // 0xf0 Tx Interrupt Coalescing ring 0
+    uint32_t txic1;  // 0xf4 Tx Interrupt Coalescing ring 1
+    uint32_t txic2;  // 0xf8 Tx Interrupt Coalescing ring 2
+    uint32_t res8[1];
+    uint32_t rxic0;  // 0x100 Rx Interrupt Coalescing ring 0
+    uint32_t rxic1;  // 0x104 Rx Interrupt Coalescing ring 0
+    uint32_t rxic2;  // 0x108 Rx Interrupt Coalescing ring 0
+    uint32_t res8a[3];
+    uint32_t iaur;   // 118 Descriptor Individual Upper Address Register
+    uint32_t ialr;   // 11C Descriptor Individual Lower Address Register
+    uint32_t gaur;   // 120 Descriptor Group Upper Address Register
+    uint32_t galr;   // 124 Descriptor Group Lower Address Register
+    uint32_t res9[7];
+    uint32_t tfwr;   // 144 Transmit FIFO Watermark Register
+    uint32_t res10[14];
+    uint32_t rdsr;   // 180 Receive Descriptor Ring Start Register
+    uint32_t tdsr;   // 184 Transmit Buffer Descriptor Ring Start Register
+    uint32_t mrbr;   /* 188 Maximum Receive Buffer Size Register
+    uint32_t res12[1];
+    uint32_t rsfl;   // 190 Receive FIFO Section Full Threshold
+    uint32_t rsem;   // 194 Receive FIFO Section Empty Threshold
+    uint32_t raem;   // 198 Receive FIFO Almost Empty Threshold
+    uint32_t rafl;   // 19C Receive FIFO Almost Full Threshold
+    uint32_t tsem;   // 1A0 Transmit FIFO Section Empty Threshold
+    uint32_t taem;   // 1A4 Transmit FIFO Almost Empty Threshold
+    uint32_t tafl;   // 1A8 Transmit FIFO Almost Full Threshold
+    uint32_t tipg;   // 1AC Transmit Inter-Packet Gap
+    uint32_t ftrl;   // 1B0 Frame Truncation Length
+    uint32_t res13[3];
+    uint32_t tacc;   // 1C0 Transmit Accelerator Function Configuration
+    uint32_t racc;   // 1C4 Receive Accelerator Function Configuration
+    uint32_t res14[14];
+    // 0x200: Statistics counters MIB block RFC 2819
+    struct mib_regs mib;
+    uint32_t res15[64];
+    // 0x400: 1588 adjustable timer (TSM) and 1588 frame control
+    uint32_t atcr;   // 400 Timer Control Register
+    uint32_t atvr;   // 404 Timer Value Register
+    uint32_t atoff;  // 408 Timer Offset Register
+    uint32_t atper;  // 40C Timer Period Register
+    uint32_t atcor;  // 410 Timer Correction Register
+    uint32_t atinc;  // 414 Time-Stamping Clock Period Register
+    uint32_t atstmp; // 418 Timestamp of Last Transmitted Frame
+    uint32_t res16[121];
+
+    // 0x600: Capture/compare block
+    uint32_t res17[1];
+    uint32_t tgsr;   // 604 Timer Global Status Register
+    uint32_t tcsr0;  // 608 Timer Control Status Register
+    uint32_t tccr0;  // 60C Timer Compare Capture Register
+    uint32_t tcsr1;  // 610 Timer Control Status Register
+    uint32_t tccr1;  // 614 Timer Compare Capture Register
+    uint32_t tcsr2;  // 618 Timer Control Status Register
+    uint32_t tccr2;  // 61C Timer Compare Capture Register
+    uint32_t tcsr3;  // 620 Timer Control Status Register
+    uint32_t tccr3;  // 624 Timer Compare Capture Register
+};
+*/
+
+/*
+
+      ┌─────┬──────────────────┬─────────────────┬───────────┬─────────────────────────────────┬───────────────────────┐
+      │ 120 │                  │                 │ helper    │                                 │                       │
+      │bytes│    hw_ring_rx    │   hw_ring_tx    │ funcs     │                                 │     2 * 1024 bytes    │
+      │     │    4120 bytes    │   4120 bytes    │ heap      │                                 │                       │
+      │     │                  │                 │ 128       │                                 │                       │
+      │     │                  │                 │ bytes     │                                 │                       │
+      └─────┴──────────────────┴─────────────────┴───────────┴─────────────────────────────────┴───────────────────────┘
+ cml_heap                                        ▲
+                                                 │                                         cml_stack =
+                                                 │                                         cml_heap[10*1024]
+                                        cml_heap[8*1024+168]
+*/
+#define ETH_FUNC_BASE                   @base + 8*1024 + 168
+
+#define EIR_OFFSET                      4
+#define EIMR_OFFSET                     8
+#define RDAR_OFFSET                     16
+#define TDAR_OFFSET                     20
+
+#define get_eth_eir(eir, eth)           \
+    var offset = eth + EIR_OFFSET;      \
+    var temp = ETH_FUNC_BASE;           \
+    @transfer32(offset, 1, temp, 0);    \
+	var eir = (lds {1} temp) & MASK_32; \
+
+#define set_eth_eir(eir, eth)           \
+    var offset = eth + EIR_OFFSET;      \
+    var temp = ETH_FUNC_BASE;           \
+    stw temp, eir;                      \
+    @transfer32(temp, 1, offset, 1);    \
+
+#define set_eth_eimr(eimr, eth)         \
+    var offset = eth + EIMR_OFFSET;     \
+    var temp = ETH_FUNC_BASE;           \
+    stw temp, eimr;                     \
+    @transfer32(temp, 1, offset, 1);    \
+
+#define set_eth_rdar(rdar, eth)         \
+    var offset = eth + RDAR_OFFSET;     \
+    var temp = ETH_FUNC_BASE;           \
+    stw temp, rdar;                     \
+    @transfer32(temp, 1, offset, 1);    \
+
+#define get_eth_tdar(tdar, eth)         \
+    var offset = eth + TDAR_OFFSET;     \
+    var temp = ETH_FUNC_BASE;           \
+    @transfer32(offset, 1, temp, 0);    \
+	var tdar = (lds {1} temp) & MASK_32;\
+
+#define set_eth_tdar(tdar, eth)         \
+    var offset = eth + TDAR_OFFSET;     \
+    var temp = ETH_FUNC_BASE;           \
+    stw temp, tdar;                     \
+    @transfer32(temp, 1, offset, 1);    \
+

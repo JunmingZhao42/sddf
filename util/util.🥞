@@ -1,5 +1,24 @@
+////////////////////////////////////////
+// Constants
+#define ETH_HWADDR_LEN 6
+#define NETIF_SIZE 1
+#define LWIP_STATE_SIZE 20
+#define NET_BUFFER_SIZE 2048
+#define LOG_NET_BUFFER_SIZE 11
+#define NUM_NETWORK_CLIENTS 2
+#define CONFIG_L1_CACHE_LINE_SIZE_BITS 6 // TODO
+
+#define NET_RX_QUEUE_SIZE_DRIV                   512
+#define NET_RX_QUEUE_SIZE_CLI0                   512
+#define NET_RX_QUEUE_SIZE_CLI1                   512
+#define NET_RX_QUEUE_SIZE_COPY0                  NET_RX_QUEUE_SIZE_DRIV
+#define NET_RX_QUEUE_SIZE_COPY1                  NET_RX_QUEUE_SIZE_DRIV
+
+////////////////////////////////////////
+#define MASK_32 4294967295
+#define MASK_16 65535
 #define CHAR_MASK 255
-#define MASK_HW 65535
+#define BYTE_MASK 255
 #define UINT32_MAX 4294967295
 #define STATIC_AREA_SIZE 512
 #define FUNC_BASE @base + STATIC_AREA_SIZE
@@ -114,4 +133,17 @@ fun pnk_atoi(1 str_addr) {
     result = 0 - result;
     return sign * result;
 }
+
+#define cache_clean(start, end) \
+    @cache_clean(start, 1, end, 1); \
+
+#define cache_clean_and_invalidate(start, end) \
+    @cache_clean_and_invalidate(start, 1, end, 1); \
+
+#define pnk_round_up(result, value, multiple)   \
+    pnk_modulo(remainder, value, multiple)      \
+    var result = value;                         \
+    if (remainder != 0) {                       \
+        result = value + multiple - remainder;  \
+    }                                           \
 

@@ -10,9 +10,6 @@
 #define VIRT_RX_CH 0
 #define CLIENT_CH 1
 
-net_queue_handle_t rx_queue_virt;
-net_queue_handle_t rx_queue_cli;
-
 uintptr_t rx_free_virt;
 uintptr_t rx_active_virt;
 uintptr_t rx_free_cli;
@@ -21,79 +18,65 @@ uintptr_t rx_active_cli;
 uintptr_t virt_buffer_data_region;
 uintptr_t cli_buffer_data_region;
 
-void rx_return(void)
-{
-    bool enqueued = false;
-    bool reprocess = true;
+net_queue_handle_t *rx_queue_virt;
+net_queue_handle_t *rx_queue_cli;
 
-    while (reprocess) {
-        while (!net_queue_empty_active(&rx_queue_virt) && !net_queue_empty_free(&rx_queue_cli)) {
-            net_buff_desc_t cli_buffer, virt_buffer = {0};
-            int err = net_dequeue_free(&rx_queue_cli, &cli_buffer);
-            assert(!err);
+static char cml_memory[1024*4];
+extern void *cml_heap;
+extern void *cml_stack;
+extern void *cml_stackend;
 
-            if (cli_buffer.io_or_offset % NET_BUFFER_SIZE || cli_buffer.io_or_offset >= NET_BUFFER_SIZE * rx_queue_cli.size) {
-                sddf_dprintf("COPY|LOG: Client provided offset %lx which is not buffer aligned or outside of buffer region\n",
-                             cli_buffer.io_or_offset);
-                continue;
-            }
+extern void cml_main(void);
+extern void pnk_notified(microkit_channel ch);
 
-            err = net_dequeue_active(&rx_queue_virt, &virt_buffer);
-            assert(!err);
-
-            uintptr_t cli_addr = cli_buffer_data_region + cli_buffer.io_or_offset;
-            uintptr_t virt_addr = virt_buffer_data_region + virt_buffer.io_or_offset;
-
-            memcpy((void *)cli_addr, (void *)virt_addr, virt_buffer.len);
-            cli_buffer.len = virt_buffer.len;
-            virt_buffer.len = 0;
-
-            err = net_enqueue_active(&rx_queue_cli, cli_buffer);
-            assert(!err);
-
-            err = net_enqueue_free(&rx_queue_virt, virt_buffer);
-            assert(!err);
-
-            enqueued = true;
-        }
-
-        net_request_signal_active(&rx_queue_virt);
-
-        /* Only request signal from client if incoming packets from multiplexer are awaiting free buffers */
-        if (!net_queue_empty_active(&rx_queue_virt)) {
-            net_request_signal_free(&rx_queue_cli);
-        } else {
-            net_cancel_signal_free(&rx_queue_cli);
-        }
-
-        reprocess = false;
-
-        if (!net_queue_empty_active(&rx_queue_virt) && !net_queue_empty_free(&rx_queue_cli)) {
-            net_cancel_signal_active(&rx_queue_virt);
-            net_cancel_signal_free(&rx_queue_cli);
-            reprocess = true;
-        }
-    }
-
-    if (enqueued && net_require_signal_active(&rx_queue_cli)) {
-        net_cancel_signal_active(&rx_queue_cli);
-        microkit_notify(CLIENT_CH);
-    }
-
-    if (enqueued && net_require_signal_free(&rx_queue_virt)) {
-        net_cancel_signal_free(&rx_queue_virt);
-        microkit_notify_delayed(VIRT_RX_CH);
-    }
+void cml_exit(int arg) {
+    microkit_dbg_puts("ERROR! We should not be getting here\n");
 }
 
-void notified(microkit_channel ch)
-{
-    rx_return();
+void cml_err(int arg) {
+    if (arg == 3) {
+        microkit_dbg_puts("Memory not ready for entry. You may have not run the init code yet, or be trying to enter during an FFI call.\n");
+    }
+  cml_exit(arg);
+}
+
+/* Need to come up with a replacement for this clear cache function. Might be worth testing just flushing the entire l1 cache, but might cause issues with returning to this file*/
+void cml_clear() {
+    microkit_dbg_puts("Trying to clear cache\n");
+}
+
+void init_pancake_mem() {
+    unsigned long sz = 1024*2;
+    unsigned long cml_heap_sz = sz;
+    unsigned long cml_stack_sz = sz;
+    cml_heap = cml_memory;
+    cml_stack = cml_heap + cml_heap_sz;
+    cml_stackend = cml_stack + cml_stack_sz;
+}
+
+void init_pancake_data() {
+    uintptr_t *heap = (uintptr_t *)cml_heap;
+    heap[5] = rx_free_virt;
+    heap[6] = rx_active_virt;
+    heap[7] = rx_free_cli;
+    heap[8] = rx_active_cli;
+    heap[9] = virt_buffer_data_region;
+    heap[10] = cli_buffer_data_region;
+    rx_queue_virt = (net_queue_handle_t *) &heap[11];
+    rx_queue_cli = (net_queue_handle_t *) &heap[14];
 }
 
 void init(void)
 {
-    net_copy_queue_init_sys(microkit_name, &rx_queue_cli, rx_free_cli, rx_active_cli, &rx_queue_virt, rx_free_virt,
+    init_pancake_mem();
+    init_pancake_data();
+    net_copy_queue_init_sys(microkit_name, rx_queue_cli, rx_free_cli, rx_active_cli, rx_queue_virt, rx_free_virt,
                             rx_active_virt);
-    net_buffers_init(&rx_queue_cli, 0);
+    net_buffers_init(rx_queue_cli, 0);
+    cml_main();
+}
+
+void notified(microkit_channel ch)
+{
+    pnk_notified(ch);
 }

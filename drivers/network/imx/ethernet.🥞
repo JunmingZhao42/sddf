@@ -1,0 +1,439 @@
+#define IRQ_CH 0
+#define TX_CH  1
+#define RX_CH  2
+
+#define RX_COUNT 256
+#define TX_COUNT 256
+// #define MAX_COUNT MAX(RX_COUNT, TX_COUNT)
+#define MAX_COUNT 256
+
+#define MAX_PACKET_SIZE     1536
+
+#define get_eth_regs(eth_regs)                          \
+    var addrs = @base + WORD_SIZE * 5;                  \
+    var eth_regs = lds {1} addrs;                       \
+
+#define get_hw_ring_buffer_vaddr(hw_ring_buffer_vaddr)  \
+    var addrs = @base + WORD_SIZE * 6;                  \
+    var hw_ring_buffer_vaddr = lds {1} addrs;           \
+
+#define get_hw_ring_buffer_paddr(hw_ring_buffer_paddr)  \
+    var addrs = @base + WORD_SIZE * 7;                  \
+    var hw_ring_buffer_paddr = lds {1} addrs;           \
+
+#define get_rx_free(rx_free)                            \
+    var addrs = @base + WORD_SIZE * 8;                  \
+    var rx_free = lds {1} addrs;                        \
+
+#define get_rx_active(rx_active)                        \
+    var addrs = @base + WORD_SIZE * 9;                  \
+    var rx_active = lds {1} addrs;                      \
+
+#define get_tx_free(tx_free)                            \
+    var addrs = @base + WORD_SIZE * 10;                 \
+    var tx_free = lds {1} addrs;                        \
+
+#define get_tx_active(tx_active)                        \
+    var addrs = @base + WORD_SIZE * 11;                 \
+    var tx_active = lds {1} addrs;                      \
+
+#define get_irq_mask(irq_mask)                          \
+    var addrs = @base + WORD_SIZE * 12;                 \
+    var irq_mask = (lds {1} addrs) & MASK_32;           \
+
+#define set_irq_mask(irq_mask)                          \
+    var addrs = @base + WORD_SIZE * 12;                 \
+    stw addrs, (irq_mask & MASK_32);                    \
+
+#define get_rx_queue(rx_queue)                          \
+    var rx_queue = @base + WORD_SIZE * 13;              \
+
+#define get_tx_queue(tx_queue)                          \
+    var tx_queue = @base + WORD_SIZE * 16;              \
+
+////// helper functions for hw_ring_buffer
+/* HW ring buffer data type */
+/*
+typedef struct {
+    uint64_t tail; // index to insert at
+    uint64_t head; // index to remove from
+    net_buff_desc_t descr_mdata[MAX_COUNT]; // associated meta data array
+    volatile struct descriptor *descr; // buffer descripter array
+} hw_ring_t;
+*/
+
+#define HW_RING_SIZE (3 * WORD_SIZE + MAX_COUNT * NET_BUFF_DESC_SIZE)
+
+// TODO: change this to use stw instead of shared memory
+#define hw_ring_get_tail(tail, hw_ring)     \
+    var tail = 0;                           \
+    !ldw tail, hw_ring;                     \
+
+#define hw_ring_set_tail(tail, hw_ring)     \
+    !stw hw_ring, tail;                     \
+
+#define hw_ring_get_head(head, hw_ring)     \
+    var head = 0;                           \
+    !ldw head, hw_ring + WORD_SIZE;         \
+
+#define hw_ring_set_head(head, hw_ring)     \
+    !stw hw_ring + WORD_SIZE, head;         \
+
+#define hw_ring_get_descr_mdata(desc, index, hw_ring)                   \
+    var desc = hw_ring + (2 * WORD_SIZE) + index * NET_BUFF_DESC_SIZE;  \
+
+#define hw_ring_get_descr(descr, hw_ring)                                   \
+    var addr = hw_ring + (2 * WORD_SIZE) + MAX_COUNT * NET_BUFF_DESC_SIZE;  \
+    var descr = lds {1} addr;                                                \
+
+#define hw_ring_full(result, hw_ring, ring_size)    \
+    hw_ring_get_tail(tail, hw_ring)                 \
+    hw_ring_get_head(head, hw_ring)                 \
+    var value = tail - head + 1;                    \
+    pnk_modulo(mod, value, ring_size)               \
+    var result = (mod == 0);                        \
+
+#define hw_ring_empty(result, hw_ring, ring_size)   \
+    hw_ring_get_tail(tail, hw_ring)                 \
+    hw_ring_get_head(head, hw_ring)                 \
+    var value = tail - head;                        \
+    pnk_modulo(mod, value, ring_size)               \
+    var result = (mod == 0);                        \
+
+/*
+// HW ring descriptor (shared with device)
+// NOTE: this is just one word
+struct descriptor {
+    uint16_t len;
+    uint16_t stat;
+    uint32_t addr;
+};
+*/
+#define DESCRIPTROR_SIZE            WORD_SIZE
+
+#define descriptor_get_len(len, descr)      \
+    var temp = ETH_FUNC_BASE;               \
+    @transfer16(descr, 1, temp, 1);         \
+    var len = (lds {1} temp) & MASK_16;     \
+
+#define descriptor_set_len(len, descr)      \
+    var temp = ETH_FUNC_BASE;               \
+    stw temp, len;                      	\
+    @transfer16(temp, 1, descr, 1);      	\
+
+#define descriptor_get_stat(stat, descr)    \
+    var temp = ETH_FUNC_BASE;               \
+    @transfer16(descr + 2, 1, temp, 1);     \
+    var stat = (lds {1} temp) & MASK_16;    \
+
+#define descriptor_set_stat(stat, descr)    \
+    var temp = ETH_FUNC_BASE;               \
+    stw temp, stat;                      	\
+    @transfer16(temp, 42, descr + 2, 1);    \
+
+#define descriptor_get_addr(addr, descr)    \
+    var temp = ETH_FUNC_BASE;               \
+    @transfer32(descr + 4, 1, temp, 1);     \
+    var addr = (lds {1} temp) & MASK_32;    \
+
+#define descriptor_set_addr(addr, descr)    \
+    var temp = ETH_FUNC_BASE;               \
+    stw temp, addr;                      	\
+    @transfer32(temp, 1, descr + 4, 1);    	\
+
+
+///// ^^ helper function finished
+#define get_hw_ring_rx(hw_ring_rx)              \
+    var hw_ring_rx = @base + WORD_SIZE * 19;    \
+
+#define get_hw_ring_tx(hw_ring_tx)                          \
+    var hw_ring_tx = @base + WORD_SIZE * 19 + HW_RING_SIZE; \
+
+#define enable_irqs(mask)   \
+    get_eth_regs(eth)           \
+    var v = mask & MASK_32;     \
+    set_eth_eimr(v, eth)        \
+    set_irq_mask(v)             \
+
+// NOTE: Pancake currently does not support uint16 and uint32 store and load
+// so we use C FFI to perform the writes. And we perform __sync_synchronize
+// over those FFI calls. Once uint16 and uint32 are supported, we should be
+// able to use shared memory feature without __sync as pancake doesn't perform
+// compilation optimisation for shared memory.
+
+#define update_ring_slot(hw_ring, idx, phys, len, stat)  \
+    hw_ring_get_descr(descr, hw_ring)                       \
+    var d_temp = descr + idx * DESCRIPTROR_SIZE;            \
+    descriptor_set_addr(phys, d_temp)                       \
+    descriptor_set_len(len, d_temp)                         \
+    descriptor_set_stat(stat, d_temp)                       \
+
+fun main () {
+    rx_provide();
+    tx_provide();
+    return 0;
+}
+
+fun rx_return() {
+    var packets_transferred = false;
+    get_hw_ring_rx(hw_ring_rx)
+    get_rx_queue(rx_queue)
+
+    while (true) {
+        hw_ring_empty(empty, hw_ring_rx, RX_COUNT)
+        if (empty) {
+            break;
+        }
+        // If buffer slot is still empty, we have processed all packets the device has filled
+        hw_ring_get_head(head, hw_ring_rx)
+
+        // volatile struct descriptor *d = &(hw_ring_rx->descr[hw_ring_rx->head]);
+        hw_ring_get_descr(descr, hw_ring_rx)
+        var d = descr + head * DESCRIPTROR_SIZE; // this is an shared mem address
+        descriptor_get_stat(stat, d)
+
+        if (stat & RXD_EMPTY) {
+            break;
+        }
+
+        hw_ring_get_descr_mdata(buffer_addr, head, hw_ring_rx)
+        descriptor_get_len(len, d)
+        set_len(len, buffer_addr)
+        var buffer = lds {2} buffer_addr;
+        var 1 err = net_enqueue_active(rx_queue, buffer);
+        assert(!err)
+
+        packets_transferred = true;
+        var new_head = head + 1;
+        pnk_modulo(mod, new_head, RX_COUNT)
+        hw_ring_set_head(mod, hw_ring_rx)
+    }
+
+    net_require_signal_active(signal, rx_queue)
+    if (packets_transferred && signal) {
+        net_cancel_signal_active(rx_queue)
+        microkit_notify(RX_CH)
+    }
+    return 0;
+}
+
+fun rx_provide() {
+    var reprocess = true;
+    get_hw_ring_rx(hw_ring_rx)
+    get_rx_queue(rx_queue)
+
+    while (reprocess) {
+        while (true) {
+            hw_ring_full(full, hw_ring_rx, RX_COUNT)
+            net_queue_empty_free(empty, rx_queue)
+            if (full || empty) {
+                break;
+            }
+
+            var buffer_addr = ETH_FUNC_BASE + 512;
+            var 1 err = net_dequeue_free(rx_queue, buffer_addr);
+            assert(!err)
+
+            var stat = RXD_EMPTY; // uint16_t
+            hw_ring_get_tail(hw_tail, hw_ring_rx)
+            if ((hw_tail + 1) == RX_COUNT) {
+                stat = (stat | WRAP) & MASK_16;
+            }
+
+            var buffer = lds {2} buffer_addr;
+            hw_ring_get_descr_mdata(hw_buff_addr, hw_tail, hw_ring_rx)
+            !stw hw_buff_addr, buffer.0;
+            !stw hw_buff_addr + WORD_SIZE, buffer.1;
+
+            get_io_or_offset(io_or_offset, buffer_addr)
+            update_ring_slot(hw_ring_rx, hw_tail, io_or_offset, 0, stat)
+            hw_tail = hw_tail + 1;
+            pnk_modulo(mod, hw_tail, RX_COUNT)
+            hw_ring_set_tail(mod, hw_ring_rx)
+        }
+
+        // Only request a notification from virtualiser if HW ring not full
+        hw_ring_full(full, hw_ring_rx, RX_COUNT)
+        if (!full) {
+            net_request_signal_free(rx_queue)
+        } else {
+            net_cancel_signal_free(rx_queue)
+        }
+
+        reprocess = false;
+
+        net_queue_empty_free(empty, rx_queue)
+        hw_ring_full(full, hw_ring_rx, RX_COUNT)
+        if ((!empty) && (!full)) {
+            net_cancel_signal_free(rx_queue)
+            reprocess = true;
+        }
+    }
+
+    hw_ring_empty(empty, hw_ring_rx, RX_COUNT)
+    get_eth_regs(eth)
+    get_irq_mask(irq_mask)
+    if (!empty) {
+        // Ensure rx IRQs are enabled
+        set_eth_rdar(RDAR_RDAR, eth)
+        if (!((irq_mask) & NETIRQ_RXF)) {
+            enable_irqs(IRQ_MASK)
+        }
+    } else {
+        enable_irqs(NETIRQ_TXF | NETIRQ_EBERR)
+    }
+
+    return 0;
+}
+
+fun tx_provide() {
+    var reprocess = true;
+    get_hw_ring_tx(hw_ring_tx)
+    get_tx_queue(tx_queue)
+    get_eth_regs(eth)
+
+    while (reprocess) {
+        while (true) {
+            hw_ring_full(full, hw_ring_tx, TX_COUNT)
+            net_queue_empty_active(empty, tx_queue)
+            if (full || empty) {
+                break;
+            }
+
+            var buffer_addr = ETH_FUNC_BASE + 512;
+            var 1 err = net_dequeue_active(tx_queue, buffer_addr);
+            assert(!err)
+
+            var stat = TXD_READY | TXD_ADDCRC | TXD_LAST; // uint16_t
+            hw_ring_get_tail(hw_tail, hw_ring_tx)
+            if ((hw_tail + 1) == TX_COUNT) {
+                stat = (stat | WRAP) & MASK_16;
+            }
+            hw_ring_get_descr_mdata(buff, hw_tail, hw_ring_tx)
+            var buffer = lds {2} buffer_addr;
+            !stw buff, buffer.0;
+            !stw buff + WORD_SIZE, buffer.1;
+
+            get_io_or_offset(io_or_offset, buffer_addr)
+            get_len(len, buffer_addr)
+            update_ring_slot(hw_ring_tx, hw_tail, io_or_offset, len, stat)
+
+            hw_tail = hw_tail + 1;
+            pnk_modulo(mod, hw_tail, TX_COUNT)
+            hw_ring_set_tail(mod, hw_ring_tx)
+
+            get_eth_tdar(tdar, eth)
+            if (!(tdar & TDAR_TDAR)) {
+                set_eth_tdar(TDAR_TDAR, eth)
+            }
+        }
+
+        net_request_signal_active(tx_queue)
+        reprocess = false;
+
+        hw_ring_full(full, hw_ring_tx, TX_COUNT)
+        net_queue_empty_active(empty, tx_queue)
+        if ((!full) && (!empty)) {
+            net_cancel_signal_active(tx_queue)
+            reprocess = true;
+        }
+    }
+    return 0;
+}
+
+fun tx_return() {
+    var enqueued = false;
+    get_tx_queue(tx_queue)
+    get_hw_ring_tx(hw_ring_tx)
+
+    while (true) {
+        hw_ring_empty(empty, hw_ring_tx, TX_COUNT)
+        if (empty) {
+            break;
+        }
+
+        // Ensure that this buffer has been sent by the device
+        hw_ring_get_head(hw_head, hw_ring_tx)
+        hw_ring_get_descr(descr, hw_ring_tx)
+        var d = descr + hw_head * DESCRIPTROR_SIZE;
+        descriptor_get_stat(stat, d)
+
+        if (stat & TXD_READY) {
+            break;
+        }
+
+        hw_ring_get_descr_mdata(buff, hw_head, hw_ring_tx)
+        set_len(0, buff)
+
+        var new_head = hw_head + 1;
+        pnk_modulo(mod, new_head, TX_COUNT)
+        hw_ring_set_head(mod, hw_ring_tx)
+
+        var buffer = lds {2} buff;
+        var 1 err = net_enqueue_free(tx_queue, buffer);
+        assert(!err)
+        enqueued = true;
+    }
+
+
+    net_require_signal_free(signal, tx_queue)
+    if (enqueued && signal) {
+        net_cancel_signal_free(tx_queue)
+        microkit_notify(TX_CH)
+    }
+    return 0;
+}
+
+fun handle_irq() {
+    get_irq_mask(irq_mask)
+    get_eth_regs(eth)
+    get_eth_eir(eir, eth)
+
+    var e = eir & irq_mask;
+    set_eth_eir(e, eth)
+
+    while (e & irq_mask) {
+        if (e & NETIRQ_TXF) {
+            tx_return();
+        }
+        if (e & NETIRQ_RXF) {
+            rx_return();
+            rx_provide();
+        }
+        if (e & NETIRQ_EBERR) {
+            skip;
+            // TODO: sddf_dprintf("ETH|ERROR: System bus/uDMA\n");
+        }
+        get_eth_eir(eir, eth)
+        e = eir & irq_mask;
+        set_eth_eir(e, eth)
+    }
+    return 0;
+}
+
+export fun pnk_notified(1 channel) {
+    if (channel == IRQ_CH) {
+        handle_irq();
+        /*
+         * Delay calling into the kernel to ack the IRQ until the next loop
+         * in the microkit event handler loop.
+         */
+        microkit_irq_ack_delayed(channel)
+        return 0;
+    }
+
+    if (channel == RX_CH) {
+        rx_provide();
+        return 0;
+    }
+
+    if (channel == TX_CH) {
+        tx_provide();
+        return 0;
+    }
+
+    // TODO:
+    // sddf_dprintf("ETH|LOG: received notification on unexpected channel: %u\n", ch);
+    @print_int(0,0,0,channel);
+    return -1;
+}

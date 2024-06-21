@@ -15,12 +15,24 @@
 ETHERNET_DRIVER_DIR := $(dir $(lastword $(MAKEFILE_LIST)))
 CHECK_NETDRV_FLAGS_MD5:=.netdrv_cflags-$(shell echo -- ${CFLAGS} ${CFLAGS_network} | shasum | sed 's/ *-//')
 
+ETHERNET_PNK = ${UTIL}/util.🥞 \
+		${NETWORK_QUEUE_INCLUDE}/queue_helper.🥞 \
+		${NETWORK_QUEUE_INCLUDE}/queue.🥞 \
+		${ETHERNET_DRIVER_DIR}/ethernet_helper.🥞 \
+		${ETHERNET_DRIVER_DIR}/ethernet.🥞
+
+ethernet_pnk.S: $(ETHERNET_PNK)
+	cat $(ETHERNET_PNK) | cpp -P | $(CAKE_COMPILER) --target=arm8 --pancake --main_return=true > $@
+
+ethernet_pnk.o: ethernet_pnk.S
+	$(CC) -c -mcpu=$(CPU) $< -o $@
+
 ${CHECK_NETDRV_FLAGS_MD5}:
 	-rm -f .netdrv_cflags-*
 	touch $@
 
-eth_driver.elf: imx/ethernet.o
-	$(LD) $(LDFLAGS) $< $(LIBS) -o $@
+eth_driver.elf: ethernet_pnk.o imx/ethernet.o pancake_ffi.o
+	$(LD) $(LDFLAGS) $^ $(LIBS) -o $@
 
 imx/ethernet.o: ${ETHERNET_DRIVER_DIR}/ethernet.c ${CHECK_NETDRV_FLAGS_MD5}
 	mkdir -p imx

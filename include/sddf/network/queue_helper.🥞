@@ -1,0 +1,131 @@
+/*
+typedef struct net_buff_desc {
+    // offset of buffer within buffer memory region or io address of buffer
+    uint64_t io_or_offset;
+    // length of data inside buffer
+    uint64_t len;
+} net_buff_desc_t;
+*/
+#define NET_BUFF_DESC_SIZE  (2 * WORD_SIZE)
+
+#define get_io_or_offset(io_or_offset, desc)    \
+    var io_or_offset = 0;                       \
+    !ldw io_or_offset, desc;                    \
+
+#define set_io_or_offset(io_or_offset, desc)    \
+    !stw desc, io_or_offset;                    \
+
+#define get_len(len, desc)      \
+    var len = 0;                \
+    !ldw len, desc + WORD_SIZE; \
+
+#define set_len(len, desc)      \
+    !stw desc + WORD_SIZE, len; \
+
+/*
+typedef struct net_queue {
+    // index to insert at
+    uint64_t tail;
+    // index to remove from
+    uint64_t head;
+    // flag to indicate whether consumer requires signalling
+    uint64_t consumer_signalled;
+    // buffer descripter array
+    net_buff_desc_t buffers[];
+} net_queue_t;
+*/
+
+#define get_tail(tail, queue)   \
+    var tail = 0;               \
+    !ldw tail, queue;           \
+
+#define set_tail(tail, queue)   \
+    !stw queue, tail;           \
+
+#define get_head(head, queue)       \
+    var head = 0;                   \
+    !ldw head, queue + WORD_SIZE;   \
+
+#define set_head(head, queue)       \
+    !stw queue + WORD_SIZE, head;   \
+
+#define get_consumer_signalled(signalled, queue)    \
+    var signalled = 0;                              \
+    !ld8 signalled, queue + 2 * WORD_SIZE;          \
+
+#define clear_consumer_signalled(queue) \
+    var signal = 0;                     \
+    !st8 queue + 2 * WORD_SIZE, signal; \
+
+#define set_consumer_signalled(queue)   \
+    var signal = 1;                     \
+    !st8 queue + 2 * WORD_SIZE, signal; \
+
+#define get_buffer_desc_addr(desc, index, queue)   \
+    var desc = queue + 3 * WORD_SIZE + index * NET_BUFF_DESC_SIZE; \
+
+/*
+typedef struct net_queue_handle {
+    // available buffers
+    net_queue_t *free;
+    // filled buffers
+    net_queue_t *active;
+    // size of the queues
+    uint64_t size;
+} net_queue_handle_t;
+*/
+#define NET_QUEUE_HANDLE_SIZE  (3 * WORD_SIZE)
+
+#define get_free_queue(free, queue_handle)  \
+    var free = 0;                           \
+    !ldw free, queue_handle;                \
+
+#define set_free_queue(free, queue_handle)  \
+    !stw queue_handle, free;                \
+
+#define get_active_queue(active, queue_handle) \
+    var active = 0;                            \
+    !ldw active, queue_handle + WORD_SIZE;     \
+
+#define set_active_queue(active, queue_handle)  \
+    !stw queue_handle + WORD_SIZE, active;      \
+
+#define get_size(size, queue_handle)        \
+    var size = 0;                           \
+    !ldw size, queue_handle + 2 * WORD_SIZE;\
+
+#define set_size(size, queue_handle)        \
+    !stw queue_handle + 2 * WORD_SIZE, size;\
+
+#define get_free_head(head, queue_handle)   \
+    get_free_queue(queue, queue_handle)     \
+    get_head(head, queue)
+
+#define set_free_head(head, queue_handle)   \
+    get_free_queue(queue, queue_handle)     \
+    set_head(head, queue)
+
+#define get_free_tail(tail, queue_handle)   \
+    get_free_queue(queue, queue_handle)     \
+    get_tail(tail, queue)
+
+#define set_free_tail(tail, queue_handle)   \
+    get_free_queue(queue, queue_handle)     \
+    set_tail(tail, queue)
+
+#define get_active_head(head, queue_handle) \
+    get_active_queue(queue, queue_handle)   \
+    get_head(head, queue)
+
+#define set_active_head(head, queue_handle) \
+    get_active_queue(queue, queue_handle)   \
+    set_head(head, queue)
+
+#define get_active_tail(tail, queue_handle) \
+    get_active_queue(queue, queue_handle)   \
+    get_tail(tail, queue)
+
+#define set_active_tail(tail, queue_handle) \
+    get_active_queue(queue, queue_handle)   \
+    set_tail(tail, queue)
+
