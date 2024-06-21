@@ -49,8 +49,7 @@ fun tx_provide() {
 			}
 			get_queue(head_addr, tx_queue_handle)
 			head_addr = head_addr + WORD_SIZE;
-			var dequeue_ret = 0;
-			dequeue_ret = serial_dequeue(tx_queue_handle, head_addr, c_addr);
+			var 1 dequeue_ret = serial_dequeue(tx_queue_handle, head_addr, c_addr);
 			if (dequeue_ret) {
 				break;
 			}

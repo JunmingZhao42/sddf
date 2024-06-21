@@ -29,8 +29,15 @@ ${CHECK_SERIAL_FLAGS_MD5}:
 	-rm -f .serial_cflags-*
 	touch $@
 
-VIRT_RX_PNK = ${UTIL}/util.🥞 ${SERIAL_QUEUE_INCLUDE}/queue_helper.🥞 ${SERIAL_QUEUE_INCLUDE}/queue.🥞 ${SDDF}/serial/components/virt_rx.🥞
-VIRT_TX_PNK = ${UTIL}/util.🥞 ${SERIAL_QUEUE_INCLUDE}/queue_helper.🥞 ${SERIAL_QUEUE_INCLUDE}/queue.🥞 ${SDDF}/serial/components/virt_tx.🥞
+VIRT_RX_PNK = ${UTIL}/util.🥞 \
+			${SERIAL_QUEUE_INCLUDE}/queue_helper.🥞 \
+			${SERIAL_QUEUE_INCLUDE}/queue.🥞 \
+			${SDDF}/serial/components/virt_rx.🥞
+
+VIRT_TX_PNK = ${UTIL}/util.🥞 \
+			${SERIAL_QUEUE_INCLUDE}/queue_helper.🥞 \
+			${SERIAL_QUEUE_INCLUDE}/queue.🥞 \
+			${SDDF}/serial/components/virt_tx.🥞
 
 serial_%_virt.elf: virt_%_pnk.o virt_%.o pancake_ffi.o
 	$(LD) $(LDFLAGS) $^ $(LIBS) -o $@
