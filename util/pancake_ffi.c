@@ -3,6 +3,8 @@
 #include <microkit.h>
 #include <sddf/util/fence.h>
 #include <sddf/util/util.h>
+#include <sddf/network/hw_ring.h>
+#include <sddf/network/queue.h>
 
 void print_address(void* addr) {
     char buf[16];
@@ -138,4 +140,65 @@ void ffimicrokit_irq_ack_delayed(unsigned char *c, long clen, unsigned char *a, 
 void ffimicrokit_notify_delayed(unsigned char *c, long clen, unsigned char *a, long alen) {
     // clen is the notification channel
     microkit_notify_delayed(clen);
+}
+
+/* Network hardware (NIC) ring operations */
+void ffiget_hw_head(unsigned char *c, long clen, unsigned char *a, long alen) {
+    hw_ring_t target_ring = (hw_ring_t *)c;
+    *(unsigned int *)a = target_ring->head;
+}
+
+void ffiget_hw_tail(unsigned char *c, long clen, unsigned char *a, long alen) {
+    hw_ring_t target_ring = (hw_ring_t *)c;
+    *(unsigned int *)a = target_ring->tail;
+}
+
+void ffiset_hw_head(unsigned char *c, long clen, unsigned char *a, long alen) {
+    hw_ring_t target_ring = (hw_ring_t *)c;
+    c->head = (c->head + 1) % (clen ? TX_COUNT : RX_COUNT);
+}
+
+void ffiset_hw_tail(unsigned char *c, long clen, unsigned char *a, long alen) {
+    hw_ring_t target_ring = (hw_ring_t *)c;
+    c->tail = (c->tail + 1) % (clen ? TX_COUNT : RX_COUNT);
+}
+
+void ffihw_ring_full(unsigned char *c, long clen, unsigned char *a, long alen) {
+    hw_ring_t target_ring = (hw_ring_t *)c;
+    *(uint64_t *)a = !((target_ring->tail - target_ring->head + 1) % (clen ? TX_COUNT : RX_COUNT));
+}
+
+void ffihw_ring_empty(unsigned char *c, long clen, unsigned char *a, long alen) {
+    hw_ring_t target_ring = (hw_ring_t *)c;
+    *(uint64_t *)a = !((target_ring->tail - target_ring->head) % (clen ? TX_COUNT : RX_COUNT));
+}
+
+void ffiget_hw_meta(unsigned char *c, long clen, unsigned char *a, long alen) {
+    hw_ring_t *r = (hw_ring_t *)c;
+    net_buff_desc_t buffer = r[clen];
+    *(net_buff_desc_t *)a = buffer;
+}
+
+void ffiset_hw_meta(unsigned char *c, long clen, unsigned char *a, long alen) {
+    hw_ring_t *r = (hw_ring_t *)c;
+    net_buff_desc_t buffer = *(net_buff_desc_t *)a;
+    r->descr_mdata[r->tail] = buffer;
+}
+
+void ffiset_hw_ring_slot(unsigned char *c, long clen, unsigned char *a, long alen) {
+    hw_ring_t *r = (hw_ring_t *)c;
+    uint64_t buffer_offset = *(uint64_t *)a;
+    update_ring_slot(r, r->tail, buffer.io_or_offset, (uint16_t)clen, (uint16_t)alen);
+}
+
+void ffiget_hw_descr_stat(unsigned char *c, long clen, unsigned char *a, long alen) {
+    hw_ring_t *r = (hw_ring_t *)c;
+    volatile struct descriptor *d = &(r->descr[clen]);
+    *(uint16_t *)a = d->stat;
+}
+
+void ffiget_hw_descr_len(unsigned char *c, long clen, unsigned char *a, long alen) {
+    hw_ring_t *r = (hw_ring_t *)c;
+    volatile struct descriptor *d = &(r->descr[clen]);
+    *(uint16_t *)a = d->len;
 }

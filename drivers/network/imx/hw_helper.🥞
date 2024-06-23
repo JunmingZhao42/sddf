@@ -1,0 +1,115 @@
+/*
+ * Pancake helpers for working with closer-to-hardware constructs.
+ * WIP; this is subject to future change/refactorings.
+ */
+
+/*
+struct descriptor {
+    uint16_t len;
+    uint16_t stat;
+    uint32_t addr;
+};
+
+/* The reference manual used to acquire these values is:
+ *
+ * i.MX 8M Mini Applications Processor Reference Manual.
+ * Document number: IMX8MMRM.
+ * Rev. 3, 11/2020.
+ *
+ * The ethernet device is described in section 11.5.
+ */
+#define ECR_RESET           1
+#define ECR_DBSWP           1 << 8
+#define MIBC_DIS            1 << 31
+#define MIBC_IDLE           1 << 30
+#define MIBC_CLEAR          1 << 29
+#define TIPG                8
+#define RACC_LINEDIS        1 << 6
+#define RCR_MII_MODE        1 << 2
+#define RCR_RGMII_EN        1 << 6
+#define RCR_PROMISCUOUS     1 << 3
+#define ECR_ETHEREN         2
+#define ECR_SPEED           1 << 5
+#define PAUSE_OPCODE_FIELD  1 << 16
+#define TCR_FDEN            1 << 2
+#define ICEN                1 << 31
+
+#define NETIRQ_BABR         1 << 30
+#define NETIRQ_BABT         1 << 29
+#define NETIRQ_GRA          1 << 28
+#define NETIRQ_TXF          1 << 27
+#define NETIRQ_TXB          1 << 26
+#define NETIRQ_RXF          1 << 25
+#define NETIRQ_RXB          1 << 24
+#define NETIRQ_MII          1 << 23
+#define NETIRQ_EBERR        1 << 22
+#define NETIRQ_LC           1 << 21
+#define NETIRQ_RL           1 << 20
+#define NETIRQ_UN           1 << 19
+#define NETIRQ_PLR          1 << 18
+#define NETIRQ_WAKEUP       1 << 17
+#define NETIRQ_TS_AVAIL     1 << 16
+#define NETIRQ_TS_TIMER     1 << 15
+
+#define IRQ_MASK            NETIRQ_RXF | NETIRQ_TXF | NETIRQ_EBERR
+
+#define RXD_EMPTY           1 << 15
+#define WRAP                1 << 13
+#define TXD_READY           1 << 15
+#define TXD_ADDCRC          1 << 10
+#define TXD_LAST            1 << 11
+
+#define RDAR_RDAR           1 << 24
+#define TDAR_TDAR           1 << 24
+
+#define TACC_IPCHK          1 << 3
+#define TACC_PROCHK         1 << 4
+
+#define STRFWD              1 << 8
+
+#define RACC_IPDIS          1 << 1
+#define RACC_PRODIS         1 << 2
+
+#define ICFT(x)             ((x) & 255) << 20
+#define RCR_MAX_FL(x)       ((x) & 16383) << 16
+
+
+/* For now just allow pancake to get/set regs used by non-init functions */
+/* eir (4), eimr (8), rdar (16), tdar (20) */
+
+#define EIR_OFFSET          4
+#define EIMR_OFFSET         8
+#define RDAR_OFFSET         16
+#define TDAR_OFFSET         20
+
+#define get_enet_regs_eir(eir, regs) \
+    @transfer_hw(regs + EIR_OFFSET, 1, TMP_STORE, 1);
+    var eir = (lds {1} TMP_STORE) & UINT32_MAX;
+
+#define get_enet_regs_eimr(eimr, regs) \
+    @transfer_hw(regs + EIMR_OFFSET, 1, TMP_STORE, 1);
+    var eimr = (lds {1} TMP_STORE) & UINT32_MAX;
+
+#define get_enet_regs_rdar(rdar, regs) \
+    @transfer_hw(regs + RDAR_OFFSET, 1, TMP_STORE, 1);
+    var rdar = (lds {1} TMP_STORE) & UINT32_MAX;
+
+#define get_enet_regs_tdar(tdar, regs) \
+    @transfer_hw(regs + TDAR_OFFSET, 1, TMP_STORE, 1);
+    var tdar = (lds {1} TMP_STORE) & UINT32_MAX;
+
+#define set_enet_regs_eir(eir, regs) \
+    stw TMP_STORE, eir; \
+    @transfer_hw(TMP_STORE, 1, regs + EIR_OFFSET, 1);
+
+#define set_enet_regs_eimr(eimr, regs) \
+    stw TMP_STORE, eimr; \
+    @transfer_hw(TMP_STORE, 1, regs + EIMR_OFFSET, 1);
+
+#define set_enet_regs_rdar(rdar, regs) \
+    stw TMP_STORE, rdar; \
+    @transfer_hw(TMP_STORE, 1, regs + RDAR_OFFSET, 1);
+
+#define set_enet_regs_tdar(tdar, regs) \
+    stw TMP_STORE, tdar; \
+    @transfer_hw(TMP_STORE, 1, regs + TDAR_OFFSET, 1);

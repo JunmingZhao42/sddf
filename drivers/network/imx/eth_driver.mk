@@ -13,18 +13,29 @@
 #  Expects libsddf_util_debug.a to be in LIBS
 
 ETHERNET_DRIVER_DIR := $(dir $(lastword $(MAKEFILE_LIST)))
-CHECK_NETDRV_FLAGS_MD5:=.netdrv_cflags-$(shell echo -- ${CFLAGS} ${CFLAGS_network} | shasum | sed 's/ *-//')
+NET_QUEUE_DIR := ${SDDF}/include/sddf/network
 
+CHECK_NETDRV_FLAGS_MD5:=.netdrv_cflags-$(shell echo -- ${CFLAGS} ${CFLAGS_network} | shasum | sed 's/ *-//')
 ${CHECK_NETDRV_FLAGS_MD5}:
 	-rm -f .netdrv_cflags-*
 	touch $@
 
-eth_driver.elf: imx/ethernet.o
+DRIVER_PNK = ${UTIL}/util.🥞 \
+	${NET_QUEUE_DIR}/net_queue.🥞 \
+	${ETHERNET_DRIVER_DIR}/hw_helper.🥞 \
+	${ETHERNET_DRIVER_DIR}/ethernet.🥞
+
+eth_pnk.o: eth_pnk.S
+	$(CC) -c -mcpu=$(CPU) $< -o $@
+
+eth_pnk.S: $(DRIVER_PNK)
+	cat $(DRIVER_PNK) | cpp -P | $(CAKE_COMPILER) --target=arm8 --pancake --main_return=true > $@
+
+eth_driver.elf: eth_pnk.o imx/ethernet.o pancake_ffi.o
 	$(LD) $(LDFLAGS) $< $(LIBS) -o $@
 
 imx/ethernet.o: ${ETHERNET_DRIVER_DIR}/ethernet.c ${CHECK_NETDRV_FLAGS_MD5}
 	mkdir -p imx
 	${CC} -c ${CFLAGS} ${CFLAGS_network} -I ${ETHERNET_DRIVER} -o $@ $<
-
 
 -include imx/ethernet.d

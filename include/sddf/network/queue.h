@@ -13,6 +13,10 @@
 #include <sddf/util/fence.h>
 #include <sddf/util/util.h>
 
+// TODO: move these?
+#define RX_COUNT 256
+#define TX_COUNT 256
+
 typedef struct net_buff_desc {
     /* offset of buffer within buffer memory region or io address of buffer */
     uint64_t io_or_offset;
