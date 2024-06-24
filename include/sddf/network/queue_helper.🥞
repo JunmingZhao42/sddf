@@ -74,6 +74,7 @@ typedef struct net_queue_handle {
     uint64_t size;
 } net_queue_handle_t;
 */
+#define NET_QUEUE_HANDLE_SIZE  (3 * WORD_SIZE)
 
 #define get_free_queue(free, queue_handle)  \
     var free = 0;                           \

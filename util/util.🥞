@@ -124,3 +124,5 @@ fun pnk_atoi(1 str_addr) {
     return sign * result;
 }
 
+#define cache_clean(start, end) \
+    @cache_clean(start, 1, end, 1); \

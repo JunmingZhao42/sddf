@@ -202,3 +202,8 @@ void ffiget_hw_descr_len(unsigned char *c, long clen, unsigned char *a, long ale
     volatile struct descriptor *d = &(r->descr[clen]);
     *(uint16_t *)a = d->len;
 }
+void fficache_clean(unsigned char *c, long clen, unsigned char *a, long alen) {
+    // c is the start address
+    // a is the end address
+    cache_clean((unsigned long) c, (unsigned long) a);
+}

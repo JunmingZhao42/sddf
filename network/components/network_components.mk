@@ -42,7 +42,10 @@ ${NETWORK_COMPONENT_OBJ}: |network/components
 ${NETWORK_COMPONENT_OBJ}: ${CHECK_NETWORK_FLAGS_MD5}
 ${NETWORK_COMPONENT_OBJ}: CFLAGS+=${CFLAGS_network}
 
-network/components/network_virt_%.o: ${SDDF}/network/components/virt_%.c
+network/components/network_virt_rx.o: ${SDDF}/network/components/virt_rx.c
+	${CC} ${CFLAGS} -c -o $@ $<
+
+network/components/network_virt_tx.o: ${SDDF}/network/components/virt_tx.c
 	${CC} ${CFLAGS} -c -o $@ $<
 
 COPY_PNK = ${UTIL}/util.🥞 \
@@ -59,7 +62,7 @@ copy_pnk.S: $(COPY_PNK)
 copy.elf: copy_pnk.o network/components/copy.o pancake_ffi.o
 	$(LD) $(LDFLAGS) $^ $(LIBS) -o $@
 
-VIRT_RX_PNK = ${UTIL}/util.🥞 \
+NETWORK_VIRT_RX_PNK = ${UTIL}/util.🥞 \
 	${NETWORK_QUEUE_INCLUDE}/queue_helper.🥞 \
 	${NETWORK_QUEUE_INCLUDE}/queue.🥞 \
 	${SDDF}/network/components/virt_rx.🥞
@@ -67,13 +70,13 @@ VIRT_RX_PNK = ${UTIL}/util.🥞 \
 network_virt_rx_pnk.o: network_virt_rx_pnk.S
 	$(CC) -c -mcpu=$(CPU) $< -o $@
 
-network_virt_rx_pnk.S: $(VIRT_RX_PNK)
-	cat $(VIRT_RX_PNK) | cpp -P | $(CAKE_COMPILER) --target=arm8 --pancake --main_return=true > $@
+network_virt_rx_pnk.S: $(NETWORK_VIRT_RX_PNK)
+	cat $(NETWORK_VIRT_RX_PNK) | cpp -P | $(CAKE_COMPILER) --target=arm8 --pancake --main_return=true > $@
 
 network_virt_rx.elf: network_virt_rx_pnk.o network/components/network_virt_rx.o pancake_ffi.o
 	$(LD) $(LDFLAGS) $^ $(LIBS) -o $@
 
-VIRT_TX_PNK = ${UTIL}/util.🥞 \
+NETWORK_VIRT_TX_PNK = ${UTIL}/util.🥞 \
 	${NETWORK_QUEUE_INCLUDE}/queue_helper.🥞 \
 	${NETWORK_QUEUE_INCLUDE}/queue.🥞 \
 	${SDDF}/network/components/virt_tx.🥞
@@ -81,12 +84,11 @@ VIRT_TX_PNK = ${UTIL}/util.🥞 \
 network_virt_tx_pnk.o: network_virt_tx_pnk.S
 	$(CC) -c -mcpu=$(CPU) $< -o $@
 
-network_virt_tx_pnk.S: $(VIRT_RX_PNK)
-	cat $(VIRT_RX_PNK) | cpp -P | $(CAKE_COMPILER) --target=arm8 --pancake --main_return=true > $@
+network_virt_tx_pnk.S: $(NETWORK_VIRT_TX_PNK)
+	cat $(NETWORK_VIRT_TX_PNK) | cpp -P | $(CAKE_COMPILER) --target=arm8 --pancake --main_return=true > $@
 
 network_virt_tx.elf: network_virt_tx_pnk.o network/components/network_virt_tx.o pancake_ffi.o
 	$(LD) $(LDFLAGS) $^ $(LIBS) -o $@
-
 
 clean::
 	rm -f network_virt_[rt]x.[od] copy.[od] arp.[od]
