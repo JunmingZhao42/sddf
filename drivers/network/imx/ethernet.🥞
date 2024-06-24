@@ -5,115 +5,116 @@
 #define RX_COUNT 256
 #define TX_COUNT 256
 
-#define ETH_REGS_OFFSET WORD_SIZE * 5
-#define IRQ_MASK_OFFSET WORD_SIZE * 6
-#define RX_QUEUE_OFFSET WORD_SIZE * 7
-#define TX_QUEUE_OFFSET WORD_SIZE * 8
-#define HW_RX_RING_OFFSET WORD_SIZE * 9
-#define HW_TX_RING_OFFSET WORD_SIZE * 10
+#define ETH_REGS_OFFSET (WORD_SIZE * 5)
+#define IRQ_MASK_OFFSET (WORD_SIZE * 6)
+#define RX_QUEUE_OFFSET (WORD_SIZE * 7)
+#define TX_QUEUE_OFFSET (WORD_SIZE * 8)
+#define HW_RX_RING_OFFSET (WORD_SIZE * 9)
+#define HW_TX_RING_OFFSET (WORD_SIZE * 10)
 
-#define TMP_STORE @base + WORD_SIZE * 42
+#define TMP_STORE (@base + (WORD_SIZE * 42))
 
 /* IRQ */
 #define get_irq_mask(irq) \
-    var irq_addr = lds {1} @base + IRQ_MASK_OFFSET; \
-    var irq = !ldw irq_addr;
+    var irq_addr = lds {1} (@base + IRQ_MASK_OFFSET); \
+    var irq = 0; \
+    !ldw irq, irq_addr; \
 
 #define enable_irqs(mask, regs) \
-    set_enet_regs_emir(mask, regs) \
-    var irq_addr = lds {1} @base + IRQ_MASK_OFFSET; \
-    !stw mask, irq_addr;
+    set_enet_regs_eimr(mask, regs) \
+    var irq_addr = lds {1} (@base + IRQ_MASK_OFFSET); \
+    !stw mask, irq_addr; \
 
 #define get_rx_q_handle(rx_q_handle) \
-    var rx_q_handle = lds {1} @base + RX_QUEUE_OFFSET;
+    var rx_q_handle = lds {1} (@base + RX_QUEUE_OFFSET); \
 
 #define get_tx_q_handle(tx_q_handle) \
-    var tx_q_handle = lds {1} @base + TX_QUEUE_OFFSET;
+    var tx_q_handle = lds {1} (@base + TX_QUEUE_OFFSET); \
 
 #define get_hw_rx(hw_rx) \
-    var hw_rx = lds {1} @base + HW_RX_RING_OFFSET;
+    var hw_rx = lds {1} (@base + HW_RX_RING_OFFSET); \
 
 #define get_hw_tx(hw_tx) \
-    var hw_tx = lds {1} @base + HW_TX_RING_OFFSET;
+    var hw_tx = lds {1} (@base + HW_TX_RING_OFFSET); \
 
 /* Like a hardware ring buffer library */
 #define get_hw_rx_tail(rx_tail, hw_rx) \
     var rx_tail = TMP_STORE; \
     @get_hw_tail(hw_rx, 0, TMP_STORE, 1); \
-    rx_tail = lds {1} TMP_STORE;
+    rx_tail = lds {1} TMP_STORE; \
 
 #define get_hw_tx_tail(tx_tail, hw_tx) \
     var tx_tail = TMP_STORE; \
     @get_hw_tail(hw_tx, 1, TMP_STORE, 1); \
-    tx_tail = lds {1} TMP_STORE;
+    tx_tail = lds {1} TMP_STORE; \
 
 #define set_hw_rx_tail(hw_rx) \
-    @set_hw_tail(hw_rx, 0, 0, 1);
+    @set_hw_tail(hw_rx, 0, 0, 1); \
 
 #define set_hw_tx_tail(hw_tx) \
-    @set_hw_tail(hw_tx, 1, 0, 1);
+    @set_hw_tail(hw_tx, 1, 0, 1); \
 
 #define get_hw_rx_head(rx_head, hw_rx) \
     var rx_head = TMP_STORE; \
     @get_hw_head(hw_rx, 0, TMP_STORE, 1); \
-    rx_head = lds {1} TMP_STORE;
+    rx_head = lds {1} TMP_STORE; \
 
 #define get_hw_tx_head(tx_head, hw_tx) \
     var tx_head = TMP_STORE; \
     @get_hw_head(hw_tx, 1, TMP_STORE, 1); \
-    tx_head = lds {1} TMP_STORE;
+    tx_head = lds {1} TMP_STORE; \
 
 #define set_hw_rx_head(hw_rx) \
-    @set_hw_head(hw_rx, 0, 0, 1);
+    @set_hw_head(hw_rx, 0, 0, 1); \
 
 #define set_hw_tx_head(hw_tx) \
-    @set_hw_head(hw_tx, 1, 0, 1);
+    @set_hw_head(hw_tx, 1, 0, 1); \
 
 #define set_hw_meta(hw_ring, buff_io_offset, buff_len) \
     st8 buff_io_offset, TMP_STORE; \
     st8 buff_len, TMP_STORE + WORD_SIZE; \
-    @set_hw_meta(hw_ring, 0, TMP_STORE, 1);
+    @set_hw_meta(hw_ring, 0, TMP_STORE, 1); \
 
 #define hw_rx_ring_full(full, hw_rx) \
     var full = 0; \
     st8 full, TMP_STORE; \
     @hw_ring_full(hw_rx, 0, TMP_STORE, 1); \
-    full = lds {1} TMP_STORE;
+    full = lds {1} TMP_STORE; \
 
 #define hw_tx_ring_full(full, hw_tx) \
     var full = 0; \
     st8 full, TMP_STORE; \
     @hw_ring_full(hw_tx, 0, TMP_STORE, 1); \
-    full = lds {1} TMP_STORE;
+    full = lds {1} TMP_STORE; \
 
 #define hw_rx_ring_empty(empty, hw_rx) \
     var empty = 0; \
     st8 empty, TMP_STORE; \
     @hw_ring_empty(hw_rx, 0, TMP_STORE, 1); \
-    empty = lds {1} TMP_STORE;
+    empty = lds {1} TMP_STORE; \
 
 #define hw_tx_ring_empty(empty, hw_tx) \
     var empty = 0; \
     st8 empty, TMP_STORE; \
     @hw_ring_empty(hw_tx, 0, TMP_STORE, 1); \
-    empty = lds {1} TMP_STORE;
+    empty = lds {1} TMP_STORE; \
 
 #define set_hw_ring_slot(hw_ring, buff_io_offset, len, stat) \
     st8 buff_io_offset, TMP_STORE; \
-    @set_hw_ring_slot(hw_ring, len, TMP_STORE, stat);
-    
+    @set_hw_ring_slot(hw_ring, len, TMP_STORE, stat); \
+
 #define get_hw_descr_stat(stat, hw_ring, idx) \
     @get_hw_descr_stat(hw_ring, idx, TMP_STORE, 0); \
-    var stat = (lds {1} TMP_STORE) & MASK_HW;
+    var stat = (lds {1} TMP_STORE) & MASK_HW; \
 
 #define get_hw_descr_len(len, hw_ring, idx) \
     @get_hw_descr_len(hw_ring, idx, TMP_STORE, 0); \
-    var len = (lds {1} TMP_STORE) & MASK_HW;
+    var len = (lds {1} TMP_STORE) & MASK_HW; \
 
 #define get_hw_meta(hw_ring, idx, buff_io_offset, buff_len) \
-    @get_hw_meta(hw_ring, idx, TMP_STORE, 0);
-    var buff_io_offset = (lds {1} TMP_STORE);
-    var buff_len = (lds {1} (TMP_STORE + WORD_SIZE));
+    @get_hw_meta(hw_ring, idx, TMP_STORE, 0); \
+    var buff_io_offset = (lds {1} TMP_STORE); \
+    var buff_len = (lds {1} (TMP_STORE + WORD_SIZE)); \
 
 fun main() {
     return 0;
@@ -121,21 +122,23 @@ fun main() {
 
 /* Pancake non-main entry points on notified */
 export fun pnk_rx_provide() {
-    var regs = ldw @base + ETH_REGS_OFFSET;
+    var regs = lds {1} (@base + ETH_REGS_OFFSET);
     /* get corresponding hw and net queues */
     get_rx_q_handle(rx_q_handle)
     get_hw_rx(hw_rx)
 
     var err = 0;
     var reprocess = true;
+
     while (reprocess) {
         hw_rx_ring_full(full, hw_rx)
-        net_queue_empty_free(net_empty, rx_q_handle);
+        net_queue_empty_free(net_empty, rx_q_handle)
         while ((!full) && (!net_empty)) {
             err = net_dequeue_free(rx_q_handle, TMP_STORE);
             assert(!err)
+
             var buff_io_offset = lds {1} TMP_STORE;
-            var buff_len = lds {1} TMP_STORE + WORD_SIZE;
+            var buff_len = lds {1} (TMP_STORE + WORD_SIZE);
 
             var stat = RXD_EMPTY;
             get_hw_rx_tail(rx_tail, hw_rx)
@@ -163,22 +166,26 @@ export fun pnk_rx_provide() {
         }
     }
 
-    hw_rx_ring_empty(empty, hw_rx);
+    hw_rx_ring_empty(empty, hw_rx)
     if (!empty) {
-        set_enet_regs_rdar(RDAR_RDAR)
+        set_enet_regs_rdar(RDAR_RDAR, regs)
         get_irq_mask(irq_mask)
         if (!(irq_mask & NETIRQ_RXF)) {
-            enable_irqs(IRQ_MASK)
+            enable_irqs(IRQ_MASK, regs)
         }
     } else {
-        enable_irqs(NETIRQ_TXF | NETIRQ_EBERR)
+        enable_irqs((NETIRQ_TXF | NETIRQ_EBERR), regs)
     }
+
+    return 0;
 }
 
 export fun pnk_rx_return() {
-    var regs = ldw @base + ETH_REGS_OFFSET;
+    var regs = lds {1} (@base + ETH_REGS_OFFSET);
     var err = 0;
     var packets_transferred = false;
+    get_rx_q_handle(rx_q_handle)
+    get_hw_rx(hw_rx)
     hw_rx_ring_empty(empty, hw_rx)
     while (empty) {
         get_hw_rx_head(rx_head, hw_rx)
@@ -202,10 +209,11 @@ export fun pnk_rx_return() {
         net_cancel_signal_active(rx_q_handle)
         microkit_notify(RX_CH)
     }
+    return 0;
 }
 
 export fun pnk_tx_provide() {
-    var regs = ldw @base + ETH_REGS_OFFSET;
+    var regs = lds {1} (@base + ETH_REGS_OFFSET);
     /* get corresponding hw and net queues */
     get_tx_q_handle(tx_q_handle)
     get_hw_tx(hw_tx)
@@ -214,18 +222,20 @@ export fun pnk_tx_provide() {
     var reprocess = true;
     while (reprocess) {
         hw_tx_ring_full(full, hw_tx)
-        net_queue_empty_active(net_empty, tx_q_handle);
+        net_queue_empty_active(net_empty, tx_q_handle)
+
         while ((!full) && (!net_empty)) {
-            err = net_dequeue_active(rx_q_handle, TMP_STORE);
+            err = net_dequeue_active(tx_q_handle, TMP_STORE);
             assert(!err)
             var buff_io_offset = lds {1} TMP_STORE;
-            var buff_len = lds {1} TMP_STORE + WORD_SIZE;
+            var buff_len = lds {1} (TMP_STORE + WORD_SIZE);
 
-            var stat = TXD_READY | TXD_ADDCRC | TXD_LAST;
-            get_hw_tx_tail(tx_tail, hw_tx);
-            if ((tx_tail + 1) == TX_COUNT) {
-                stat = stat | WRAP;
+            var stat = ((TXD_READY) | (TXD_ADDCRC) | (TXD_LAST));
+            get_hw_tx_tail(tx_tail, hw_tx)
+            if ((tx_tail + 1) == (TX_COUNT)) {
+                stat = (stat | WRAP);
             }
+
             set_hw_meta(hw_tx, buff_io_offset, buff_len)
             set_hw_ring_slot(hw_tx, buff_io_offset, buff_len, stat)
             set_hw_tx_tail(hw_tx)
@@ -239,20 +249,23 @@ export fun pnk_tx_provide() {
         net_request_signal_active(tx_q_handle)
         reprocess = false;
 
-        hw_rx_ring_full(full, hw_rx)
-        net_queue_empty_active(net_empty, tx_q_handle);
+        hw_tx_ring_full(full, hw_tx)
+        net_queue_empty_active(net_empty, tx_q_handle)
         if (!net_empty && !full) {
             net_cancel_signal_active(tx_q_handle)
             reprocess = true;
         }
     }
+    return 0;
 }
 
 export fun pnk_tx_return() {
-    var regs = ldw @base + ETH_REGS_OFFSET;
+    var regs = lds {1} (@base + ETH_REGS_OFFSET);
     var err = 0;
     var enqueued = false;
+    get_hw_tx(hw_tx)
     hw_tx_ring_empty(empty, hw_tx)
+    get_tx_q_handle(tx_q_handle)
     while (empty) {
         get_hw_tx_head(tx_head, hw_tx)
         get_hw_descr_stat(stat, hw_tx, tx_head)
@@ -260,10 +273,10 @@ export fun pnk_tx_return() {
             break;
         }
 
-        get_hw_meta(hw_rx, rx_head, buff_io_offset, buff_len)
+        get_hw_meta(hw_tx, tx_head, buff_io_offset, buff_len)
         buff_len = 0;
 
-        set_hw_head(hw_tx)
+        set_hw_tx_head(hw_tx)
 
         err = net_enqueue_free(tx_q_handle, buff_io_offset, buff_len);
         assert(!err)
@@ -275,14 +288,15 @@ export fun pnk_tx_return() {
         net_cancel_signal_free(tx_q_handle)
         microkit_notify(TX_CH)
     }
+    return 0;
 }
 
 export fun pnk_handle_irq() {
-    var regs = ldw @base + ETH_REGS_OFFSET;
+    var regs = lds {1} (@base + ETH_REGS_OFFSET);
     get_enet_regs_eir(eir, regs)
     get_irq_mask(irq_mask)
     var e = eir & irq_mask;
-    
+
     set_enet_regs_eir(e, regs)
 
     while (e & irq_mask) {
@@ -293,10 +307,10 @@ export fun pnk_handle_irq() {
             pnk_rx_return();
             pnk_rx_provide();
         }
-        if (e & NETIRQ_EBERR) {
-            /* error */
-            // sddf_dprintf("ETH|ERROR: System bus/uDMA\n");
-        }
+        // if (e & NETIRQ_EBERR) {
+        //     /* error */
+        //     // sddf_dprintf("ETH|ERROR: System bus/uDMA\n");
+        // }
 
         get_enet_regs_eir(eir, regs)
         get_irq_mask(irq_mask)
@@ -304,4 +318,5 @@ export fun pnk_handle_irq() {
 
         set_enet_regs_eir(e, regs)
     }
+    return 0;
 }

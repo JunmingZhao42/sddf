@@ -1,3 +1,59 @@
+/* Helper macros and functions */
+/* Offsets for net_queue_t fields */
+#define QUEUE_TAIL 0
+#define QUEUE_HEAD WORD_SIZE
+#define QUEUE_CSIG (WORD_SIZE * 2)
+#define QUEUE_BUFF (WORD_SIZE * 3)
+#define QUEUE_BUFF_SZ (WORD_SIZE * 2)
+
+/* Offsets for net_queue_handle_t fields */
+#define HANDLE_FREE 0
+#define HANDLE_ACTV WORD_SIZE
+#define HANDLE_SIZE (WORD_SIZE * 2)
+
+/* queue getters */
+#define queue_get_tail(tail, queue) \
+	var tail = 0; \
+	!ldw tail, queue + QUEUE_TAIL; \
+
+#define queue_get_head(head, queue) \
+	var head = 0; \
+	!ldw head, queue + QUEUE_HEAD; \
+
+#define queue_get_consumer_signalled(signalled, queue) \
+	var signalled = 0; \
+	!ldw signalled, queue + QUEUE_CSIG; \
+
+#define queue_get_nth_buffer(buff_io_offset, buff_len, n, queue) \
+	var buff_io_offset = 0; \
+	var buff_len = 0; \
+	!ldw buff_io_offset, queue + QUEUE_BUFF + QUEUE_BUFF_SZ * n; \
+	!ldw buff_len, queue + QUEUE_BUFF + QUEUE_BUFF_SZ * n + WORD_SIZE; \
+
+/* queue setters */
+#define queue_set_tail(tail, queue) \
+	!stw tail, queue + QUEUE_TAIL; \
+
+#define queue_set_head(head, queue) \
+	!stw head, queue + QUEUE_HEAD; \
+
+#define queue_set1_consumer_signalled(queue) \
+	var set1 = 1; \
+	!stw set1, queue + QUEUE_CSIG; \
+
+#define queue_set0_consumer_signalled(queue) \
+	var set0 = 0; \
+	!stw set0, queue + QUEUE_CSIG; \
+
+#define queue_set_nth_buffer(buff_io_offset, buff_len, n, queue) \
+	!stw buff_io_offset, queue + QUEUE_BUFF + QUEUE_BUFF_SZ * n; \
+	!stw buff_len, queue + QUEUE_BUFF + QUEUE_BUFF_SZ * n + WORD_SIZE; \
+
+/* q_handle getters */
+#define q_handle_get_size(size, q_handle) \
+	var size = 0; \
+	!ldw size, q_handle + HANDLE_SIZE; \
+
 /*
  * The current Pancake library for working with network queue structures.
  * Due to design differences between regular (e.g. serial) and ethernet queues/buffers,
@@ -15,7 +71,7 @@
  #define net_queue_size(res, queue) \
 	queue_get_tail(tail, queue) \
 	queue_get_head(head, queue) \
-	var res = tail - head;
+	var res = tail - head; \
 
 
 /**
@@ -29,7 +85,7 @@
 	var free_queue = q_handle + HANDLE_FREE; \
 	queue_get_tail(tail, free_queue) \
 	queue_get_head(head, free_queue) \
-	var res = ((tail - head) == 0);
+	var res = ((tail - head) == 0); \
 
 
 /**
@@ -43,7 +99,7 @@
 	var actv_queue = q_handle + HANDLE_ACTV; \
 	queue_get_tail(tail, actv_queue) \
 	queue_get_head(head, actv_queue) \
-	var res = ((tail - head) == 0);
+	var res = ((tail - head) == 0); \
 
 
 /**
@@ -57,7 +113,8 @@
 	var free_queue = q_handle + HANDLE_FREE; \
 	queue_get_tail(tail, free_queue) \
 	queue_get_head(head, free_queue) \
-	var res = ((tail + 1 - head) == size);
+	q_handle_get_size(size, q_handle) \
+	var res = ((tail + 1 - head) == size); \
 
 
 /**
@@ -71,7 +128,8 @@
 	var actv_queue = q_handle + HANDLE_ACTV; \
 	queue_get_tail(tail, actv_queue) \
 	queue_get_head(head, actv_queue) \
-	var res = ((tail + 1 - head) == size);
+	q_handle_get_size(size, q_handle) \
+	var res = ((tail + 1 - head) == size); \
 
 
 /**
@@ -84,7 +142,7 @@
 */
 /* nbdt is pointer to buffer desc. */
 fun net_enqueue_free(1 q_handle, 1 nbdt) {
-	net_queue_full_free(full, q_handle);
+	net_queue_full_free(full, q_handle)
 	if (full) {
 		return -1;
 	}
@@ -173,7 +231,7 @@ fun net_dequeue_free(1 q_handle, 1 nbdt) {
 	var free_queue = q_handle + HANDLE_FREE;
 	queue_get_head(head, free_queue)
 	q_handle_get_size(size, q_handle)
-	pnk_modulo(head, size)
+	pnk_modulo(n, head, size)
 
 	/* *nbdt = free_queue->buffers[head % size]; */
 	queue_get_nth_buffer(buff_io_offset, buff_len, n, free_queue)
@@ -237,7 +295,7 @@ fun net_dequeue_active(1 q_handle, 1 nbdt) {
 #define net_queue_init(q_handle, free, active, size) \
 	!stw free, q_handle + HANDLE_FREE; \
 	!stw active, q_handle + HANDLE_ACTV; \
-	!stw size, q_handle + HANDLE_SIZE;
+	!stw size, q_handle + HANDLE_SIZE; \
 
 
 /**
@@ -256,8 +314,8 @@ fun net_buffers_init(1 q_handle, 1 base_addr) {
 		!stw zero, cnt;
 		!stw zero, cnt + WORD_SIZE;
 
-		err = net_enqueue_free(q_handle, cnt)
-		ASSERT(!err)
+		err = net_enqueue_free(q_handle, cnt);
+		assert(!err)
 		cnt = cnt + QUEUE_BUFF_SZ;
 	}
 }
@@ -272,7 +330,7 @@ fun net_buffers_init(1 q_handle, 1 base_addr) {
 #define net_request_signal_free(q_handle) \
 	var free_queue = q_handle + HANDLE_FREE; \
 	queue_set0_consumer_signalled(free_queue) \
-	THREAD_MEMORY_RELEASE()
+	THREAD_MEMORY_RELEASE() \
 
 
 /**
@@ -283,7 +341,7 @@ fun net_buffers_init(1 q_handle, 1 base_addr) {
 #define net_request_signal_active(q_handle) \
 	var active_queue = q_handle + HANDLE_ACTV; \
 	queue_set0_consumer_signalled(active_queue) \
-	THREAD_MEMORY_RELEASE()
+	THREAD_MEMORY_RELEASE() \
 
 
 /**
@@ -294,7 +352,7 @@ fun net_buffers_init(1 q_handle, 1 base_addr) {
 #define net_cancel_signal_free(q_handle) \
 	var free_queue = q_handle + HANDLE_FREE; \
 	queue_set1_consumer_signalled(free_queue) \
-	THREAD_MEMORY_RELEASE()
+	THREAD_MEMORY_RELEASE() \
 
 
 /**
@@ -305,7 +363,7 @@ fun net_buffers_init(1 q_handle, 1 base_addr) {
 #define net_cancel_signal_active(q_handle) \
 	var active_queue = q_handle + HANDLE_ACTV; \
 	queue_set1_consumer_signalled(active_queue) \
-	THREAD_MEMORY_RELEASE()
+	THREAD_MEMORY_RELEASE() \
 
 
 /**
@@ -316,7 +374,7 @@ fun net_buffers_init(1 q_handle, 1 base_addr) {
 #define net_require_signal_free(res, q_handle) \
 	var free_queue = q_handle + HANDLE_FREE; \
 	queue_get_consumer_signalled(signalled, free_queue) \
-	var res = (signalled == 0);
+	var res = (signalled == 0); \
 
 
 /**
@@ -327,62 +385,5 @@ fun net_buffers_init(1 q_handle, 1 base_addr) {
 #define net_require_signal_active(res, q_handle) \
 	var active_queue = q_handle + HANDLE_ACTV; \
 	queue_get_consumer_signalled(signalled, active_queue) \
-	var res = (signalled == 0);
+	var res = (signalled == 0); \
 
-
-/* Helper macros and functions */
-
-/* Offsets for net_queue_t fields */
-#define QUEUE_TAIL 0
-#define QUEUE_HEAD WORD_SIZE
-#define QUEUE_CSIG WORD_SIZE * 2
-#define QUEUE_BUFF WORD_SIZE * 3
-#define QUEUE_BUFF_SZ WORD_SIZE * 2
-
-/* Offsets for net_queue_handle_t fields */
-#define HANDLE_FREE 0
-#define HANDLE_ACTV WORD_SIZE
-#define HANDLE_SIZE WORD_SIZE * 2
-
-/* queue getters */
-#define queue_get_tail(tail, queue) \
-	var tail = 0; \
-	!ldw tail, queue + QUEUE_TAIL;
-
-#define queue_get_head(head, queue) \
-	var head = 0; \
-	!ldw head, queue + QUEUE_HEAD;
-
-#define queue_get_consumer_signalled(signalled, queue) \
-	var signalled = 0; \
-	!ldw signalled, queue + QUEUE_CSIG;
-
-#define queue_get_nth_buffer(buff_io_offset, buff_len, n, queue) \
-	var buff_io_offset = 0; \
-	var buff_len = 0; \
-	!ldw buff_io_offset, queue + QUEUE_BUFF + QUEUE_BUFF_SZ * n; \
-	!ldw buff_len, queue + QUEUE_BUFF + QUEUE_BUFF_SZ * n + WORD_SIZE;
-
-/* queue setters */
-#define queue_set_tail(tail, queue) \
-	!stw tail, queue + QUEUE_TAIL;	
-
-#define queue_set_head(head, queue) \
-	!stw head, queue + QUEUE_HEAD;
-
-#define queue_set1_consumer_signalled(queue) \
-	var set1 = 1; \
-	!stw set1, queue + QUEUE_CSIG;
-
-#define queue_set0_consumer_signalled(queue) \
-	var set0 = 0; \
-	!stw set0, queue + QUEUE_CSIG;
-
-#define queue_set_nth_buffer(buff_io_offset, buff_len, n, queue) \
-	!stw buff_io_offset, queue + QUEUE_BUFF + QUEUE_BUFF_SZ * n; \
-	!stw buff_len, queue + QUEUE_BUFF + QUEUE_BUFF_SZ * n + WORD_SIZE;
-
-/* q_handle getters */
-#define q_handle_get_size(size, q_handle) \
-	var size = 0; \
-	!ldw size, q_handle + HANDLE_SIZE;

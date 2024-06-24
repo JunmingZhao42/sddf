@@ -51,9 +51,9 @@ struct descriptor {
 #define NETIRQ_TS_AVAIL     1 << 16
 #define NETIRQ_TS_TIMER     1 << 15
 
-#define IRQ_MASK            NETIRQ_RXF | NETIRQ_TXF | NETIRQ_EBERR
+#define IRQ_MASK            (NETIRQ_RXF | NETIRQ_TXF | NETIRQ_EBERR)
 
-#define RXD_EMPTY           1 << 15
+#define RXD_EMPTY           (1 << 15)
 #define WRAP                1 << 13
 #define TXD_READY           1 << 15
 #define TXD_ADDCRC          1 << 10
@@ -83,33 +83,34 @@ struct descriptor {
 #define TDAR_OFFSET         20
 
 #define get_enet_regs_eir(eir, regs) \
-    @transfer_hw(regs + EIR_OFFSET, 1, TMP_STORE, 1);
-    var eir = (lds {1} TMP_STORE) & UINT32_MAX;
+    @transfer_hw(regs + EIR_OFFSET, 1, TMP_STORE, 1); \
+    var eir = (lds {1} TMP_STORE) & UINT32_MAX; \
 
 #define get_enet_regs_eimr(eimr, regs) \
-    @transfer_hw(regs + EIMR_OFFSET, 1, TMP_STORE, 1);
-    var eimr = (lds {1} TMP_STORE) & UINT32_MAX;
+    @transfer_hw(regs + EIMR_OFFSET, 1, TMP_STORE, 1); \
+    var eimr = (lds {1} TMP_STORE) & UINT32_MAX; \
 
 #define get_enet_regs_rdar(rdar, regs) \
-    @transfer_hw(regs + RDAR_OFFSET, 1, TMP_STORE, 1);
-    var rdar = (lds {1} TMP_STORE) & UINT32_MAX;
+    @transfer_hw(regs + RDAR_OFFSET, 1, TMP_STORE, 1); \
+    var rdar = (lds {1} TMP_STORE) & UINT32_MAX; \
 
 #define get_enet_regs_tdar(tdar, regs) \
-    @transfer_hw(regs + TDAR_OFFSET, 1, TMP_STORE, 1);
-    var tdar = (lds {1} TMP_STORE) & UINT32_MAX;
+    @transfer_hw(regs + TDAR_OFFSET, 1, TMP_STORE, 1); \
+    var tdar = (lds {1} TMP_STORE) & UINT32_MAX; \
 
 #define set_enet_regs_eir(eir, regs) \
     stw TMP_STORE, eir; \
-    @transfer_hw(TMP_STORE, 1, regs + EIR_OFFSET, 1);
+    @transfer_hw(TMP_STORE, 1, regs + EIR_OFFSET, 1); \
 
 #define set_enet_regs_eimr(eimr, regs) \
     stw TMP_STORE, eimr; \
-    @transfer_hw(TMP_STORE, 1, regs + EIMR_OFFSET, 1);
+    @transfer_hw(TMP_STORE, 1, regs + EIMR_OFFSET, 1); \
 
 #define set_enet_regs_rdar(rdar, regs) \
     stw TMP_STORE, rdar; \
-    @transfer_hw(TMP_STORE, 1, regs + RDAR_OFFSET, 1);
+    @transfer_hw(TMP_STORE, 1, regs + RDAR_OFFSET, 1); \
 
 #define set_enet_regs_tdar(tdar, regs) \
     stw TMP_STORE, tdar; \
-    @transfer_hw(TMP_STORE, 1, regs + TDAR_OFFSET, 1);
+    @transfer_hw(TMP_STORE, 1, regs + TDAR_OFFSET, 1); \
+

@@ -5,6 +5,8 @@
 #include <sddf/util/util.h>
 #include <sddf/network/queue.h>
 
+#define MAX_COUNT MAX(RX_COUNT, TX_COUNT)
+
 /* Hardware constructs and helpers; TODO: find somewhere better to put this */
 /* HW ring descriptor (shared with device) */
 struct descriptor {

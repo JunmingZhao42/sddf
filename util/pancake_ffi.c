@@ -5,6 +5,7 @@
 #include <sddf/util/util.h>
 #include <sddf/network/hw_ring.h>
 #include <sddf/network/queue.h>
+#include <sddf/util/cache.h>
 
 void print_address(void* addr) {
     char buf[16];
@@ -144,38 +145,38 @@ void ffimicrokit_notify_delayed(unsigned char *c, long clen, unsigned char *a, l
 
 /* Network hardware (NIC) ring operations */
 void ffiget_hw_head(unsigned char *c, long clen, unsigned char *a, long alen) {
-    hw_ring_t target_ring = (hw_ring_t *)c;
-    *(unsigned int *)a = target_ring->head;
+    hw_ring_t target_ring = *(hw_ring_t *)c;
+    *(unsigned int *)a = target_ring.head;
 }
 
 void ffiget_hw_tail(unsigned char *c, long clen, unsigned char *a, long alen) {
-    hw_ring_t target_ring = (hw_ring_t *)c;
-    *(unsigned int *)a = target_ring->tail;
+    hw_ring_t target_ring = *(hw_ring_t *)c;
+    *(unsigned int *)a = target_ring.tail;
 }
 
 void ffiset_hw_head(unsigned char *c, long clen, unsigned char *a, long alen) {
-    hw_ring_t target_ring = (hw_ring_t *)c;
-    c->head = (c->head + 1) % (clen ? TX_COUNT : RX_COUNT);
+    hw_ring_t target_ring = *(hw_ring_t *)c;
+    target_ring.head = (target_ring.head + 1) % (clen ? TX_COUNT : RX_COUNT);
 }
 
 void ffiset_hw_tail(unsigned char *c, long clen, unsigned char *a, long alen) {
-    hw_ring_t target_ring = (hw_ring_t *)c;
-    c->tail = (c->tail + 1) % (clen ? TX_COUNT : RX_COUNT);
+    hw_ring_t target_ring = *(hw_ring_t *)c;
+    target_ring.tail = (target_ring.tail + 1) % (clen ? TX_COUNT : RX_COUNT);
 }
 
 void ffihw_ring_full(unsigned char *c, long clen, unsigned char *a, long alen) {
-    hw_ring_t target_ring = (hw_ring_t *)c;
-    *(uint64_t *)a = !((target_ring->tail - target_ring->head + 1) % (clen ? TX_COUNT : RX_COUNT));
+    hw_ring_t target_ring = *(hw_ring_t *)c;
+    *(uint64_t *)a = !((target_ring.tail - target_ring.head + 1) % (clen ? TX_COUNT : RX_COUNT));
 }
 
 void ffihw_ring_empty(unsigned char *c, long clen, unsigned char *a, long alen) {
-    hw_ring_t target_ring = (hw_ring_t *)c;
-    *(uint64_t *)a = !((target_ring->tail - target_ring->head) % (clen ? TX_COUNT : RX_COUNT));
+    hw_ring_t target_ring = *(hw_ring_t *)c;
+    *(uint64_t *)a = !((target_ring.tail - target_ring.head) % (clen ? TX_COUNT : RX_COUNT));
 }
 
 void ffiget_hw_meta(unsigned char *c, long clen, unsigned char *a, long alen) {
     hw_ring_t *r = (hw_ring_t *)c;
-    net_buff_desc_t buffer = r[clen];
+    net_buff_desc_t buffer = r->descr_mdata[clen];
     *(net_buff_desc_t *)a = buffer;
 }
 
@@ -188,7 +189,7 @@ void ffiset_hw_meta(unsigned char *c, long clen, unsigned char *a, long alen) {
 void ffiset_hw_ring_slot(unsigned char *c, long clen, unsigned char *a, long alen) {
     hw_ring_t *r = (hw_ring_t *)c;
     uint64_t buffer_offset = *(uint64_t *)a;
-    update_ring_slot(r, r->tail, buffer.io_or_offset, (uint16_t)clen, (uint16_t)alen);
+    update_ring_slot(r, r->tail, buffer_offset, (uint16_t)clen, (uint16_t)alen);
 }
 
 void ffiget_hw_descr_stat(unsigned char *c, long clen, unsigned char *a, long alen) {
