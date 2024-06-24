@@ -82,7 +82,7 @@
 *
 * @return -1 when queue is full, 0 on success.
 */
-/* TODO: check param; assuming nbdt is pointer to buffer desc. */
+/* nbdt is pointer to buffer desc. */
 fun net_enqueue_free(1 q_handle, 1 nbdt) {
 	net_queue_full_free(full, q_handle);
 	if (full) {
@@ -93,8 +93,8 @@ fun net_enqueue_free(1 q_handle, 1 nbdt) {
 	var free_queue = q_handle + HANDLE_FREE;
 	queue_get_tail(tail, free_queue)
 	q_handle_get_size(size, q_handle)
-	var n = 0;
-	n = pnk_modulo(tail, size)
+	/* TODO: can `size` ever be not a power of 2? */
+	pnk_modulo(n, tail, size)
 
 	var buff_io_offset = 0;
 	var buff_len = 0;
@@ -133,8 +133,7 @@ fun net_enqueue_active(1 q_handle, 1 nbdt) {
 	var active_queue = q_handle + HANDLE_ACTV;
 	queue_get_tail(tail, active_queue)
 	q_handle_get_size(size, q_handle)
-	var n = 0;
-	n = pnk_modulo(tail, size)
+	pnk_modulo(n, tail, size)
 
 	/* buff_io_offset = nbdt->io_offset; buff_len = nbdt->len; */
 	var buff_io_offset = 0;
@@ -174,8 +173,7 @@ fun net_dequeue_free(1 q_handle, 1 nbdt) {
 	var free_queue = q_handle + HANDLE_FREE;
 	queue_get_head(head, free_queue)
 	q_handle_get_size(size, q_handle)
-	var n = 0;
-	n = pnk_modulo(head, size)
+	pnk_modulo(head, size)
 
 	/* *nbdt = free_queue->buffers[head % size]; */
 	queue_get_nth_buffer(buff_io_offset, buff_len, n, free_queue)
@@ -211,8 +209,7 @@ fun net_dequeue_active(1 q_handle, 1 nbdt) {
 	var active_queue = q_handle + HANDLE_ACTV;
 	queue_get_head(head, active_queue)
 	q_handle_get_size(size, q_handle)
-	var n = 0;
-	n = pnk_modulo(head, size)
+	pnk_modulo(n, head, size)
 
 	/* *nbdt = active_queue->buffers[head % size]; */
 	queue_get_nth_buffer(buff_io_offset, buff_len, n, active_queue)
