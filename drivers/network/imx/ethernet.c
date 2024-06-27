@@ -61,7 +61,7 @@ net_queue_handle_t *tx_queue;
 volatile struct enet_regs *eth;
 uint64_t *irq_mask;
 
-static char cml_memory[1024*12];
+static char cml_memory[1024*11];
 extern void *cml_heap;
 extern void *cml_stack;
 extern void *cml_stackend;
@@ -86,8 +86,8 @@ void cml_clear() {
 }
 
 void init_pancake_mem() {
-    unsigned long cml_heap_sz = 1024*10;
-    unsigned long cml_stack_sz = 1024*2;
+    unsigned long cml_heap_sz = 1024*9;
+    unsigned long cml_stack_sz = 1024;
     cml_heap = cml_memory;
     cml_stack = cml_heap + cml_heap_sz;
     cml_stackend = cml_stack + cml_stack_sz;

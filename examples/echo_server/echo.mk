@@ -57,17 +57,6 @@ ${CHECK_FLAGS_BOARD_MD5}:
 	-rm -f .board_cflags-*
 	touch $@
 
-LWIP_PNK = ${UTIL}/util.🥞 \
-		${NETWORK_QUEUE_INCLUDE}/queue_helper.🥞 \
-		${NETWORK_QUEUE_INCLUDE}/queue.🥞 \
-		${ECHO_SERVER}/lwip.🥞
-
-lwip_pnk.S: $(LWIP_PNK)
-	cat $(LWIP_PNK) | cpp -P | $(CAKE_COMPILER) --target=arm8 --pancake --main_return=true > $@
-
-lwip_pnk.o: lwip_pnk.S
-	$(CC) -c -mcpu=$(CPU) $< -o $@
-
 %.elf: %.o
 	$(LD) $(LDFLAGS) $< $(LIBS) -o $@
 
@@ -79,7 +68,7 @@ NETIFFILES:=$(LWIPDIR)/netif/ethernet.c
 
 # LWIPFILES: All the above.
 LWIPFILES=lwip.c $(COREFILES) $(CORE4FILES) $(NETIFFILES)
-LWIP_OBJS := $(LWIPFILES:.c=.o) lwip_pnk.o lwip.o utilization_socket.o \
+LWIP_OBJS := $(LWIPFILES:.c=.o) lwip.o utilization_socket.o \
 	     udp_echo_socket.o tcp_echo_socket.o
 
 OBJS := $(LWIP_OBJS)

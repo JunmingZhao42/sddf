@@ -34,6 +34,7 @@
 
 char *serial_tx_data;
 serial_queue_t *serial_tx_queue;
+serial_queue_handle_t serial_tx_queue_handle;
 
 #define LWIP_TICK_MS 100
 #define NUM_PBUFFS 512
@@ -45,10 +46,6 @@ uintptr_t tx_active;
 uintptr_t rx_buffer_data_region;
 uintptr_t tx_buffer_data_region;
 uintptr_t uart_base;
-
-serial_queue_handle_t *serial_tx_queue_handle;
-net_queue_handle_t *rx_queue_handle;
-net_queue_handle_t *tx_queue_handle;
 
 /* Booleans to indicate whether packets have been enqueued during notification handling */
 static bool notify_tx;
@@ -70,60 +67,13 @@ LWIP_MEMPOOL_DECLARE(
 typedef struct state {
     struct netif netif;
     uint8_t mac[ETH_HWADDR_LEN];
+    net_queue_handle_t rx_queue;
+    net_queue_handle_t tx_queue;
     struct pbuf *head;
     struct pbuf *tail;
 } state_t;
 
 state_t state;
-
-static char cml_memory[1024*4];
-extern void *cml_heap;
-extern void *cml_stack;
-extern void *cml_stackend;
-
-extern void cml_main(void);
-extern void pnk_receive(void);
-
-void cml_exit(int arg) {
-    microkit_dbg_puts("ERROR! We should not be getting here\n");
-}
-
-void cml_err(int arg) {
-    if (arg == 3) {
-        microkit_dbg_puts("Memory not ready for entry. You may have not run the init code yet, or be trying to enter during an FFI call.\n");
-    }
-  cml_exit(arg);
-}
-
-/* Need to come up with a replacement for this clear cache function. Might be worth testing just flushing the entire l1 cache, but might cause issues with returning to this file*/
-void cml_clear() {
-    microkit_dbg_puts("Trying to clear cache\n");
-}
-
-void init_pancake_mem() {
-    unsigned long sz = 1024*2;
-    unsigned long cml_heap_sz = sz;
-    unsigned long cml_stack_sz = sz;
-    cml_heap = cml_memory;
-    cml_stack = cml_heap + cml_heap_sz;
-    cml_stackend = cml_stack + cml_stack_sz;
-}
-
-void init_pancake_data() {
-    uintptr_t *heap = (uintptr_t *)cml_heap;
-    heap[5] = rx_free;
-    heap[6] = rx_active;
-    heap[7] = tx_free;
-    heap[8] = tx_active;
-    heap[9] = rx_buffer_data_region;
-    heap[10] = tx_buffer_data_region;
-    heap[11] = uart_base;
-    serial_tx_queue_handle = (serial_queue_handle_t *) &heap[12];
-    rx_queue_handle = (net_queue_handle_t *) &heap[15];
-    tx_queue_handle = (net_queue_handle_t *) &heap[18];
-    heap[21] = (uintptr_t) &(state.head);
-    heap[22] = (uintptr_t) &(state.tail);
-}
 
 void set_timeout(void)
 {
@@ -146,7 +96,7 @@ static void interface_free_buffer(struct pbuf *p)
     pbuf_custom_offset_t *custom_pbuf_offset = (pbuf_custom_offset_t *)p;
     SYS_ARCH_PROTECT(old_level);
     net_buff_desc_t buffer = {custom_pbuf_offset->offset, 0};
-    int err = net_enqueue_free(rx_queue_handle, buffer);
+    int err = net_enqueue_free(&(state.rx_queue), buffer);
     assert(!err);
     notify_rx = true;
     LWIP_MEMPOOL_FREE(RX_POOL, custom_pbuf_offset);
@@ -186,7 +136,7 @@ static struct pbuf *create_interface_buffer(uintptr_t offset, size_t length)
 void enqueue_pbufs(struct pbuf *p)
 {
     /* Indicate to the multiplexer that we require transmit free buffers */
-    net_request_signal_free(tx_queue_handle);
+    net_request_signal_free(&state.tx_queue);
 
     if (state.head == NULL) {
         state.head = p;
@@ -210,13 +160,13 @@ static err_t lwip_eth_send(struct netif *netif, struct pbuf *p)
         return ERR_MEM;
     }
 
-    if (net_queue_empty_free(tx_queue_handle)) {
+    if (net_queue_empty_free(&state.tx_queue)) {
         enqueue_pbufs(p);
         return ERR_OK;
     }
 
     net_buff_desc_t buffer;
-    int err = net_dequeue_free(tx_queue_handle, &buffer);
+    int err = net_dequeue_free(&state.tx_queue, &buffer);
     assert(!err);
 
     unsigned char *frame = (unsigned char *)(buffer.io_or_offset + tx_buffer_data_region);
@@ -227,7 +177,7 @@ static err_t lwip_eth_send(struct netif *netif, struct pbuf *p)
     }
 
     buffer.len = copied;
-    err = net_enqueue_active(tx_queue_handle, buffer);
+    err = net_enqueue_active(&state.tx_queue, buffer);
     assert(!err);
 
     notify_tx = true;
@@ -239,7 +189,7 @@ void transmit(void)
 {
     bool reprocess = true;
     while (reprocess) {
-        while (state.head != NULL && !net_queue_empty_free(tx_queue_handle)) {
+        while (state.head != NULL && !net_queue_empty_free(&state.tx_queue)) {
             err_t err = lwip_eth_send(&state.netif, state.head);
             if (err == ERR_MEM) {
                 sddf_dprintf("LWIP|ERROR: attempted to send a packet of size  %u > BUFFER SIZE  %u\n", state.head->tot_len,
@@ -257,15 +207,15 @@ void transmit(void)
         }
 
         /* Only request a signal if no more pbufs enqueud to send */
-        if (state.head == NULL || !net_queue_empty_free(tx_queue_handle)) {
-            net_cancel_signal_free(tx_queue_handle);
+        if (state.head == NULL || !net_queue_empty_free(&state.tx_queue)) {
+            net_cancel_signal_free(&state.tx_queue);
         } else {
-            net_request_signal_free(tx_queue_handle);
+            net_request_signal_free(&state.tx_queue);
         }
         reprocess = false;
 
-        if (state.head != NULL && !net_queue_empty_free(tx_queue_handle)) {
-            net_cancel_signal_free(tx_queue_handle);
+        if (state.head != NULL && !net_queue_empty_free(&state.tx_queue)) {
+            net_cancel_signal_free(&state.tx_queue);
             reprocess = true;
         }
     }
@@ -275,9 +225,9 @@ void receive(void)
 {
     bool reprocess = true;
     while (reprocess) {
-        while (!net_queue_empty_active(rx_queue_handle)) {
+        while (!net_queue_empty_active(&state.rx_queue)) {
             net_buff_desc_t buffer;
-            int err = net_dequeue_active(rx_queue_handle, &buffer);
+            int err = net_dequeue_active(&state.rx_queue, &buffer);
             assert(!err);
 
             struct pbuf *p = create_interface_buffer(buffer.io_or_offset, buffer.len);
@@ -287,11 +237,11 @@ void receive(void)
             }
         }
 
-        net_request_signal_active(rx_queue_handle);
+        net_request_signal_active(&state.rx_queue);
         reprocess = false;
 
-        if (!net_queue_empty_active(rx_queue_handle)) {
-            net_cancel_signal_active(rx_queue_handle);
+        if (!net_queue_empty_active(&state.rx_queue)) {
+            net_cancel_signal_active(&state.rx_queue);
             reprocess = true;
         }
     }
@@ -329,44 +279,17 @@ static void netif_status_callback(struct netif *netif)
 {
     if (dhcp_supplied_address(netif)) {
         sddf_printf("LWIP|NOTICE: DHCP request for %s returned IP address: %s\r\n", microkit_name,
-                   ip4addr_ntoa(netif_ip4_addr(netif)));
-    }
-}
-
-void print_intt(int num) {
-    if (num < 0) {
-        microkit_dbg_putc('-');
-        num = -num;
-    }
-
-    if (num == 0) {
-        microkit_dbg_putc('0');
-        return;
-    }
-
-    char buf[10];
-    int i = 0;
-
-    while (num != 0) {
-        buf[i++] = (num % 10) + '0';
-        num /= 10;
-    }
-
-    while (i > 0) {
-        microkit_dbg_putc(buf[--i]);
+                    ip4addr_ntoa(netif_ip4_addr(netif)));
     }
 }
 
 void init(void)
 {
-    init_pancake_mem();
-    init_pancake_data();
+    serial_cli_queue_init_sys(microkit_name, NULL, NULL, NULL, &serial_tx_queue_handle, serial_tx_queue, serial_tx_data);
+    serial_putchar_init(SERIAL_TX_CH, &serial_tx_queue_handle);
 
-    serial_cli_queue_init_sys(microkit_name, NULL, NULL, NULL, serial_tx_queue_handle, serial_tx_queue, serial_tx_data);
-    serial_putchar_init(SERIAL_TX_CH, serial_tx_queue_handle);
-
-    net_cli_queue_init_sys(microkit_name, rx_queue_handle, rx_free, rx_active, tx_queue_handle, tx_free, tx_active);
-    net_buffers_init(tx_queue_handle, 0);
+    net_cli_queue_init_sys(microkit_name, &state.rx_queue, rx_free, rx_active, &state.tx_queue, tx_free, tx_active);
+    net_buffers_init(&state.tx_queue, 0);
 
     lwip_init();
     set_timeout();
@@ -402,8 +325,8 @@ void init(void)
     setup_utilization_socket();
     setup_tcp_socket();
 
-    if (notify_rx && net_require_signal_free(rx_queue_handle)) {
-        net_cancel_signal_free(rx_queue_handle);
+    if (notify_rx && net_require_signal_free(&state.rx_queue)) {
+        net_cancel_signal_free(&state.rx_queue);
         notify_rx = false;
         if (!have_signal) {
             microkit_notify_delayed(RX_CH);
@@ -412,8 +335,8 @@ void init(void)
         }
     }
 
-    if (notify_tx && net_require_signal_active(tx_queue_handle)) {
-        net_cancel_signal_active(tx_queue_handle);
+    if (notify_tx && net_require_signal_active(&state.tx_queue)) {
+        net_cancel_signal_active(&state.tx_queue);
         notify_tx = false;
         if (!have_signal) {
             microkit_notify_delayed(TX_CH);
@@ -421,7 +344,6 @@ void init(void)
             microkit_notify(TX_CH);
         }
     }
-    cml_main();
 }
 
 void notified(microkit_channel ch)
@@ -443,8 +365,8 @@ void notified(microkit_channel ch)
         break;
     }
 
-    if (notify_rx && net_require_signal_free(rx_queue_handle)) {
-        net_cancel_signal_free(rx_queue_handle);
+    if (notify_rx && net_require_signal_free(&state.rx_queue)) {
+        net_cancel_signal_free(&state.rx_queue);
         notify_rx = false;
         if (!have_signal) {
             microkit_notify_delayed(RX_CH);
@@ -453,8 +375,8 @@ void notified(microkit_channel ch)
         }
     }
 
-    if (notify_tx && net_require_signal_active(tx_queue_handle)) {
-        net_cancel_signal_active(tx_queue_handle);
+    if (notify_tx && net_require_signal_active(&state.tx_queue)) {
+        net_cancel_signal_active(&state.tx_queue);
         notify_tx = false;
         if (!have_signal) {
             microkit_notify_delayed(TX_CH);

@@ -20,7 +20,7 @@
 #define CHAR_MASK 255
 #define BYTE_MASK 255
 #define UINT32_MAX 4294967295
-#define STATIC_AREA_SIZE 512
+#define STATIC_AREA_SIZE 256
 #define FUNC_BASE @base + STATIC_AREA_SIZE
 
 #define BIT(nr) (1 << nr)

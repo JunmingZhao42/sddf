@@ -18,7 +18,7 @@ serial_queue_handle_t* tx_queue_handle;
 uintptr_t uart_base;
 volatile imx_uart_regs_t *uart_regs;
 
-static char cml_memory[1024*4];
+static char cml_memory[1024*2];
 
 extern void cml_main(void);
 extern void pnk_notified(microkit_channel ch);
@@ -43,7 +43,7 @@ void cml_clear() {
 }
 
 void init_pancake_mem() {
-    unsigned long sz = 1024*2;
+    unsigned long sz = 1024;
     unsigned long cml_heap_sz = sz;
     unsigned long cml_stack_sz = sz;
     cml_heap = cml_memory;
