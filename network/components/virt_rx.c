@@ -43,7 +43,7 @@ uint8_t *mac_addrs;
 static char cml_memory[1024*2];
 
 extern void cml_main(void);
-extern void pnk_notified(microkit_channel ch);
+extern void notified(microkit_channel ch);
 extern void *cml_heap;
 extern void *cml_stack;
 extern void *cml_stackend;
@@ -108,9 +108,4 @@ void init(void)
     }
 
     cml_main();
-}
-
-void notified(microkit_channel ch)
-{
-    pnk_notified(ch);
 }

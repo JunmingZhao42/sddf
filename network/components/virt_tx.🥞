@@ -197,7 +197,7 @@ export fun tx_provide() {
     return 0;
 }
 
-export fun pnk_notified(1 ch) {
+export fun notified(1 ch) {
     tx_return();
     tx_provide();
     return 0;

@@ -250,7 +250,7 @@ fun pnk_tx_provide(1 channel) {
 }
 
 
-export fun pnk_notified(1 channel) {
+export fun notified(1 channel) {
     if (channel == DRIVER_CH) {
         pnk_tx_return();
     } else {

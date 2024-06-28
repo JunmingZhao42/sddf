@@ -31,7 +31,7 @@ uintptr_t *buffer_region_paddrs;
 static char cml_memory[1280];
 
 extern void cml_main(void);
-extern void pnk_notified(microkit_channel ch);
+extern void notified(microkit_channel ch);
 extern void tx_provide(void);
 extern void *cml_heap;
 extern void *cml_stack;
@@ -97,9 +97,4 @@ void init(void)
     cml_main();
 
     tx_provide();
-}
-
-void notified(microkit_channel ch)
-{
-    pnk_notified(ch);
 }

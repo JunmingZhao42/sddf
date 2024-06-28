@@ -245,7 +245,7 @@ fun serial_transfer_all(1 active_queue_handle, 1 free_queue_handle) {
         pnk_modulo(active_offset, active_head, active_size)
         var src = active_data_region + active_offset;
 
-        pnk_memcpy(dst, src, to_transfer);
+        pnk_memcpy(dst, src, to_transfer)
 
         // Make copy visible
         serial_update_visible_tail(free_queue_handle, free_tail + to_transfer);
@@ -301,7 +301,7 @@ fun serial_transfer_all_with_colour(1 active_queue_handle, 1 free_queue_handle,
         // src = colour_start + colour_transferred
         var src = colour_start + colour_transferred;
 
-        pnk_memcpy(dst, src, to_transfer);
+        pnk_memcpy(dst, src, to_transfer)
 
         // Make copy visible
         serial_update_visible_tail(free_queue_handle, free_tail + to_transfer);
@@ -338,7 +338,7 @@ fun serial_transfer_all_with_colour(1 active_queue_handle, 1 free_queue_handle,
         pnk_modulo(active_offset, active_head, active_size)
         var src = active_data_region + active_offset;
 
-        pnk_memcpy(dst, src, to_transfer);
+        pnk_memcpy(dst, src, to_transfer)
 
         // Make copy visible
         serial_update_visible_tail(free_queue_handle, free_tail + to_transfer);
@@ -372,7 +372,7 @@ fun serial_transfer_all_with_colour(1 active_queue_handle, 1 free_queue_handle,
         // src = colour_end + colour_transferred
         var src = colour_end + colour_transferred;
 
-        pnk_memcpy(dst, src, to_transfer);
+        pnk_memcpy(dst, src, to_transfer)
 
         // Make copy visible
         serial_update_visible_tail(free_queue_handle, free_tail + to_transfer);

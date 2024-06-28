@@ -67,7 +67,7 @@ extern void *cml_stack;
 extern void *cml_stackend;
 
 extern void cml_main(void);
-extern void pnk_notified(microkit_channel ch);
+extern void notified(microkit_channel ch);
 
 void cml_exit(int arg) {
     microkit_dbg_puts("ERROR! We should not be getting here\n");
@@ -202,11 +202,6 @@ void init(void)
     net_queue_init(tx_queue, (net_queue_t *)tx_free, (net_queue_t *)tx_active, NET_TX_QUEUE_SIZE_DRIV);
 
     cml_main();
-}
-
-void notified(microkit_channel ch)
-{
-    pnk_notified(ch);
 }
 
 void ffiupdate_ring_slot_rx(unsigned int idx, uintptr_t phys, uint16_t len, uint16_t stat)

@@ -27,7 +27,7 @@ extern void *cml_stack;
 extern void *cml_stackend;
 
 extern void cml_main(void);
-extern void pnk_notified(microkit_channel ch);
+extern void notified(microkit_channel ch);
 
 void cml_exit(int arg) {
     microkit_dbg_puts("ERROR! We should not be getting here\n");
@@ -73,9 +73,4 @@ void init(void)
                             rx_active_virt);
     net_buffers_init(rx_queue_cli, 0);
     cml_main();
-}
-
-void notified(microkit_channel ch)
-{
-    pnk_notified(ch);
 }

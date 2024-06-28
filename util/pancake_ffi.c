@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <string.h>
 #include <stdlib.h>
 #include <microkit.h>
 #include <sddf/util/fence.h>
@@ -155,4 +156,8 @@ void fficache_clean(unsigned char *c, long clen, unsigned char *a, long alen) {
 
 void fficache_clean_and_invalidate(unsigned char *c, long clen, unsigned char *a, long alen) {
     cache_clean_and_invalidate((unsigned long) c, (unsigned long) a);
+}
+
+void ffimemcpy(unsigned char *c, long clen, unsigned char *a, long alen) {
+    memcpy((void *) c, (void *) a, clen);
 }

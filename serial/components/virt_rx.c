@@ -32,7 +32,7 @@ char *next_client;
 static char cml_memory[1024*4];
 
 extern void cml_main(void);
-extern void pnk_notified(microkit_channel ch);
+extern void notified(microkit_channel ch);
 extern void *cml_heap;
 extern void *cml_stack;
 extern void *cml_stackend;
@@ -83,9 +83,4 @@ void init(void)
     serial_queue_init(rx_queue_handle_drv, rx_queue_drv, SERIAL_RX_DATA_REGION_SIZE_DRIV, rx_data_drv);
     serial_virt_queue_init_sys(microkit_name, rx_queue_handle_cli, rx_queue_cli0, rx_data_cli0);
     cml_main();
-}
-
-void notified(microkit_channel ch)
-{
-    pnk_notified(ch);
 }
