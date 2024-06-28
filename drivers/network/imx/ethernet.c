@@ -61,7 +61,7 @@ net_queue_handle_t *tx_queue;
 volatile struct enet_regs *eth;
 uint64_t *irq_mask;
 
-static char cml_memory[1024*11];
+static char cml_memory[1024*10];
 extern void *cml_heap;
 extern void *cml_stack;
 extern void *cml_stackend;
@@ -207,4 +207,32 @@ void init(void)
 void notified(microkit_channel ch)
 {
     pnk_notified(ch);
+}
+
+void ffiupdate_ring_slot_rx(unsigned int idx, uintptr_t phys, uint16_t len, uint16_t stat)
+{
+    hw_ring_t *ring = hw_ring_rx;
+    volatile struct descriptor *d = &(ring->descr[idx]);
+    d->addr = phys;
+    d->len = len;
+
+    /* Ensure all writes to the descriptor complete, before we set the flags
+     * that makes hardware aware of this slot.
+     */
+    __sync_synchronize();
+    d->stat = stat;
+}
+
+void ffiupdate_ring_slot_tx(unsigned int idx, uintptr_t phys, uint16_t len, uint16_t stat)
+{
+    hw_ring_t *ring = hw_ring_tx;
+    volatile struct descriptor *d = &(ring->descr[idx]);
+    d->addr = phys;
+    d->len = len;
+
+    /* Ensure all writes to the descriptor complete, before we set the flags
+     * that makes hardware aware of this slot.
+     */
+    __sync_synchronize();
+    d->stat = stat;
 }

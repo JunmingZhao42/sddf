@@ -10,69 +10,71 @@
 
 /* Queue regions */
 #define get_rx_free_drv(rx_free_drv)    \
-    var addrs = @base + WORD_SIZE * 5;  \
+    var addrs = @base + 40;             \
     var rx_free_drv = lds {1} addrs;    \
 
 #define get_rx_active_drv(rx_active_drv)\
-    var addrs = @base + WORD_SIZE * 6;  \
+    var addrs = @base + 48;             \
     var rx_active_drv = lds {1} addrs;  \
 
 #define get_rx_free_cli0(rx_free_cli0)  \
-    var addrs = @base + WORD_SIZE * 7;  \
+    var addrs = @base + 56;             \
     var rx_free_cli0 = lds {1} addrs;   \
 
 #define get_rx_active_cli0(rx_active_cli0)  \
-    var addrs = @base + WORD_SIZE * 8;      \
+    var addrs = @base + 64;                 \
     var rx_active_cli0 = lds {1} addrs;     \
 
 #define get_rx_free_cli1(rx_free_cli1)  \
-    var addrs = @base + WORD_SIZE * 9;  \
+    var addrs = @base + 72;             \
     var rx_free_cli1 = lds {1} addrs;   \
 
 #define get_rx_active_cli1(rx_active_cli1)  \
-    var addrs = @base + WORD_SIZE * 10;     \
+    var addrs = @base + 80;                 \
     var rx_active_cli1 = lds {1} addrs;     \
 
 /* Buffer data regions */
 #define get_buffer_data_vaddr(buffer_data_vaddr)    \
-    var addrs = @base + WORD_SIZE * 11;             \
+    var addrs = @base + 88;                         \
     var buffer_data_vaddr = lds {1} addrs;          \
 
 #define get_buffer_data_paddr(buffer_data_paddr)    \
-    var addrs = @base + WORD_SIZE * 12;             \
+    var addrs = @base + 96;                         \
     var buffer_data_paddr = lds {1} addrs;          \
 
 #define get_notify_drv(notify_drv)      \
-    var addrs = @base + WORD_SIZE * 13; \
+    var addrs = @base + 104;            \
     var notify_drv = lds {1} addrs;     \
 
 // Boolean to indicate whether a packet has been enqueued
 // into the driver's free queue during notification handling
 #define set_notify_drv(notify_drv)      \
-    var addrs = @base + WORD_SIZE * 13; \
+    var addrs = @base + 104;            \
     stw addrs, notify_drv;              \
 
 // #define get_CONFIG_L1_CACHE_LINE_SIZE_BITS(CONFIG_L1_CACHE_LINE_SIZE_BITS) \
 //     var addrs = @base + WORD_SIZE * 14; \
 //     var CONFIG_L1_CACHE_LINE_SIZE_BITS = lds {1} addrs; \
 
-#define get_rx_queue_drv(rx_queue_drv)          \
-    var rx_queue_drv = @base + WORD_SIZE * 15;  \
+#define get_rx_queue_drv(rx_queue_drv)  \
+    var rx_queue_drv = @base + 120;     \
 
-#define get_rx_queue_clients(queue_handle, client)                              \
-    var queue_handle = @base + WORD_SIZE * 18 + client * NET_QUEUE_HANDLE_SIZE; \
+#define get_rx_queue_clients(queue_handle, client)                  \
+    var queue_handle = @base + 144 + client * NET_QUEUE_HANDLE_SIZE;\
 
-#define get_mac_addrs_i(mac, client, i)                                                 \
-    var addrs = @base + WORD_SIZE * 18 + NUM_NETWORK_CLIENTS * NET_QUEUE_HANDLE_SIZE;   \
-    var mac = ld8 (addrs + (client * ETH_HWADDR_LEN) + i);                              \
+#define get_mac_addrs_i(mac, client, i)                     \
+    var addrs = @base + 192;                                \
+    var mac = ld8 (addrs + (client * ETH_HWADDR_LEN) + i);  \
 
-#define get_buffer_refs(value, ref_index)                           \
-    var addrs = @base + 128 * WORD_SIZE + ref_index * WORD_SIZE;    \
-    var value = lds {1} addrs;                                      \
+#define get_buffer_refs(value, ref_index)   \
+    var addrs = @base + 208 + ref_index;    \
+    var value = ld8 addrs;                  \
 
-#define set_buffer_refs(value, ref_index)                           \
-    var addrs = @base + 128 * WORD_SIZE + ref_index * WORD_SIZE;    \
-    stw addrs, value;                                               \
+#define set_buffer_refs(value, ref_index)   \
+    var addrs = @base + 208 + ref_index;    \
+    st8 addrs, value;                       \
+
+#define VIRT_RX_FUNC_BASE (@base + 720)
 
 fun main() {
     return 0;
@@ -132,7 +134,7 @@ fun get_mac_addr_match(1 buffer_addr) {
 
 fun rx_return() {
     var reprocess = true;
-    var notify_clients_addr = FUNC_BASE + 200;
+    var notify_clients_addr = VIRT_RX_FUNC_BASE;
     get_rx_queue_drv(rx_queue_drv)
     get_buffer_data_paddr(buffer_data_paddr)
     get_buffer_data_vaddr(buffer_data_vaddr)
@@ -144,7 +146,7 @@ fun rx_return() {
                 break;
             }
 
-            var buffer_addr = FUNC_BASE + 256;
+            var buffer_addr = VIRT_RX_FUNC_BASE + 24;
             var 1 err = net_dequeue_active(rx_queue_drv, buffer_addr);
             assert(!err)
 
@@ -237,7 +239,7 @@ fun rx_provide() {
                     break;
                 }
 
-                var buffer_addr = FUNC_BASE + 256;
+                var buffer_addr = VIRT_RX_FUNC_BASE;
                 var 1 err = net_dequeue_free(rx_qh, buffer_addr);
                 assert(!err)
 

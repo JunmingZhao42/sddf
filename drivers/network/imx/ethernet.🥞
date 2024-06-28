@@ -9,47 +9,47 @@
 
 #define MAX_PACKET_SIZE     1536
 
-#define get_eth_regs(eth_regs)                          \
-    var addrs = @base + WORD_SIZE * 5;                  \
-    var eth_regs = lds {1} addrs;                       \
+#define get_eth_regs(eth_regs)      \
+    var addrs = @base + 40;         \
+    var eth_regs = lds {1} addrs;   \
 
 #define get_hw_ring_buffer_vaddr(hw_ring_buffer_vaddr)  \
-    var addrs = @base + WORD_SIZE * 6;                  \
+    var addrs = @base + 48;                             \
     var hw_ring_buffer_vaddr = lds {1} addrs;           \
 
 #define get_hw_ring_buffer_paddr(hw_ring_buffer_paddr)  \
-    var addrs = @base + WORD_SIZE * 7;                  \
+    var addrs = @base + 56;                             \
     var hw_ring_buffer_paddr = lds {1} addrs;           \
 
 #define get_rx_free(rx_free)                            \
-    var addrs = @base + WORD_SIZE * 8;                  \
+    var addrs = @base + 64;                             \
     var rx_free = lds {1} addrs;                        \
 
 #define get_rx_active(rx_active)                        \
-    var addrs = @base + WORD_SIZE * 9;                  \
+    var addrs = @base + 72;                             \
     var rx_active = lds {1} addrs;                      \
 
 #define get_tx_free(tx_free)                            \
-    var addrs = @base + WORD_SIZE * 10;                 \
+    var addrs = @base + 80;                             \
     var tx_free = lds {1} addrs;                        \
 
 #define get_tx_active(tx_active)                        \
-    var addrs = @base + WORD_SIZE * 11;                 \
+    var addrs = @base + 88;                             \
     var tx_active = lds {1} addrs;                      \
 
 #define get_irq_mask(irq_mask)                          \
-    var addrs = @base + WORD_SIZE * 12;                 \
+    var addrs = @base + 96;                             \
     var irq_mask = (lds {1} addrs) & MASK_32;           \
 
 #define set_irq_mask(irq_mask)                          \
-    var addrs = @base + WORD_SIZE * 12;                 \
+    var addrs = @base + 96;                             \
     stw addrs, (irq_mask & MASK_32);                    \
 
 #define get_rx_queue(rx_queue)                          \
-    var rx_queue = @base + WORD_SIZE * 13;              \
+    var rx_queue = @base + 104;                         \
 
 #define get_tx_queue(tx_queue)                          \
-    var tx_queue = @base + WORD_SIZE * 16;              \
+    var tx_queue = @base + 128;                         \
 
 ////// helper functions for hw_ring_buffer
 /* HW ring buffer data type */
@@ -79,8 +79,8 @@ typedef struct {
 #define hw_ring_set_head(head, hw_ring)     \
     !stw hw_ring + WORD_SIZE, head;         \
 
-#define hw_ring_get_descr_mdata(desc, index, hw_ring)                   \
-    var desc = hw_ring + (2 * WORD_SIZE) + index * NET_BUFF_DESC_SIZE;  \
+#define hw_ring_get_descr_mdata(desc, index, hw_ring)       \
+    var desc = hw_ring + 16 + index * NET_BUFF_DESC_SIZE;   \
 
 #define hw_ring_get_descr(descr, hw_ring)                                   \
     var addr = hw_ring + (2 * WORD_SIZE) + MAX_COUNT * NET_BUFF_DESC_SIZE;  \
@@ -143,13 +143,13 @@ struct descriptor {
 
 
 ///// ^^ helper function finished
-#define get_hw_ring_rx(hw_ring_rx)              \
-    var hw_ring_rx = @base + WORD_SIZE * 19;    \
+#define get_hw_ring_rx(hw_ring_rx)      \
+    var hw_ring_rx = @base + 152;       \
 
 #define get_hw_ring_tx(hw_ring_tx)                          \
     var hw_ring_tx = @base + WORD_SIZE * 19 + HW_RING_SIZE; \
 
-#define enable_irqs(mask)   \
+#define enable_irqs(mask)       \
     get_eth_regs(eth)           \
     var v = mask & MASK_32;     \
     set_eth_eimr(v, eth)        \
@@ -161,7 +161,7 @@ struct descriptor {
 // able to use shared memory feature without __sync as pancake doesn't perform
 // compilation optimisation for shared memory.
 
-#define update_ring_slot(hw_ring, idx, phys, len, stat)  \
+#define update_ring_slot(hw_ring, idx, phys, len, stat)     \
     hw_ring_get_descr(descr, hw_ring)                       \
     var d_temp = descr + idx * DESCRIPTROR_SIZE;            \
     descriptor_set_addr(phys, d_temp)                       \
@@ -246,7 +246,9 @@ fun rx_provide() {
             !stw hw_buff_addr + WORD_SIZE, buffer.1;
 
             get_io_or_offset(io_or_offset, buffer_addr)
-            update_ring_slot(hw_ring_rx, hw_tail, io_or_offset, 0, stat)
+            // update_ring_slot(hw_ring_rx, hw_tail, io_or_offset, 0, stat)
+            @update_ring_slot_rx(hw_tail, io_or_offset, 0, stat);
+
             hw_tail = hw_tail + 1;
             pnk_modulo(mod, hw_tail, RX_COUNT)
             hw_ring_set_tail(mod, hw_ring_rx)
@@ -316,7 +318,8 @@ fun tx_provide() {
 
             get_io_or_offset(io_or_offset, buffer_addr)
             get_len(len, buffer_addr)
-            update_ring_slot(hw_ring_tx, hw_tail, io_or_offset, len, stat)
+            // update_ring_slot(hw_ring_tx, hw_tail, io_or_offset, len, stat)
+            @update_ring_slot_tx(hw_tail, io_or_offset, len, stat);
 
             hw_tail = hw_tail + 1;
             pnk_modulo(mod, hw_tail, TX_COUNT)

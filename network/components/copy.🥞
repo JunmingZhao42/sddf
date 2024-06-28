@@ -1,35 +1,37 @@
 #define VIRT_RX_CH 0
 #define CLIENT_CH 1
 
-#define get_rx_free_virt(rx_free_virt) \
-    var addr = @base + WORD_SIZE * 5; \
-    var rx_free_virt = lds {1} addr; \
+#define get_rx_free_virt(rx_free_virt)                          \
+    var addr = @base + 40;              \
+    var rx_free_virt = lds {1} addr;    \
 
-#define get_rx_active_virt(rx_active_virt) \
-    var addr = @base + WORD_SIZE * 6; \
-    var rx_active_virt = lds {1} addr; \
+#define get_rx_active_virt(rx_active_virt)  \
+    var addr = @base + 48;                  \
+    var rx_active_virt = lds {1} addr;      \
 
-#define get_rx_free_cli(rx_free_cli) \
-    var addr = @base + WORD_SIZE * 7; \
-    var rx_free_cli = lds {1} addr; \
+#define get_rx_free_cli(rx_free_cli)    \
+    var addr = @base + 56;              \
+    var rx_free_cli = lds {1} addr;     \
 
-#define get_rx_active_cli(rx_active_cli) \
-    var addr = @base + WORD_SIZE * 8; \
-    var rx_active_cli = lds {1} addr; \
+#define get_rx_active_cli(rx_active_cli)    \
+    var addr = @base + 64;                  \
+    var rx_active_cli = lds {1} addr;       \
 
-#define get_virt_buffer_data_region(virt_buffer_data_region) \
-    var addr = @base + WORD_SIZE * 9; \
-    var virt_buffer_data_region = lds {1} addr; \
+#define get_virt_buffer_data_region(virt_buffer_data_region)    \
+    var addr = @base + 72;                                      \
+    var virt_buffer_data_region = lds {1} addr;                 \
 
-#define get_cli_buffer_data_region(cli_buffer_data_region) \
-    var addr = @base + WORD_SIZE * 10; \
-    var cli_buffer_data_region = lds {1} addr; \
+#define get_cli_buffer_data_region(cli_buffer_data_region)  \
+    var addr = @base + 80;                                  \
+    var cli_buffer_data_region = lds {1} addr;              \
 
-#define get_rx_queue_virt_handle(rx_queue_virt) \
-    var rx_queue_virt = @base + WORD_SIZE * 11; \
+#define get_rx_queue_virt_handle(rx_queue_virt)     \
+    var rx_queue_virt = @base + 88;                 \
 
-#define get_rx_queue_cli_handle(rx_queue_cli) \
-    var rx_queue_cli = @base + WORD_SIZE * 14; \
+#define get_rx_queue_cli_handle(rx_queue_cli)       \
+    var rx_queue_cli = @base + 112;                 \
+
+#define COPY_FUNC_BASE (@base + 160)
 
 fun main() {
     return 0;
@@ -50,8 +52,8 @@ fun rx_return() {
             if (!((!empty_a) && (!empty_f))) {
                 break;
             }
-            var cli_buffer_addr = FUNC_BASE + 512;
-            var virt_buffer_addr = FUNC_BASE + 512 + 2*WORD_SIZE;
+            var cli_buffer_addr = COPY_FUNC_BASE;
+            var virt_buffer_addr = COPY_FUNC_BASE + 16;
             var {1} err = net_dequeue_free(rx_queue_cli, cli_buffer_addr);
             assert(!err)
 

@@ -28,7 +28,7 @@ net_queue_handle_t *tx_queue_clients;
 uintptr_t *buffer_region_vaddrs;
 uintptr_t *buffer_region_paddrs;
 
-static char cml_memory[1024*2];
+static char cml_memory[1280];
 
 extern void cml_main(void);
 extern void pnk_notified(microkit_channel ch);
@@ -54,9 +54,8 @@ void cml_clear() {
 }
 
 void init_pancake_mem() {
-    unsigned long sz = 1024;
-    unsigned long cml_heap_sz = sz;
-    unsigned long cml_stack_sz = sz;
+    unsigned long cml_heap_sz = 256;
+    unsigned long cml_stack_sz = 1024;
     cml_heap = cml_memory;
     cml_stack = cml_heap + cml_heap_sz;
     cml_stackend = cml_stack + cml_stack_sz;

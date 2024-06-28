@@ -21,7 +21,7 @@ uintptr_t cli_buffer_data_region;
 net_queue_handle_t *rx_queue_virt;
 net_queue_handle_t *rx_queue_cli;
 
-static char cml_memory[1024*2];
+static char cml_memory[1280];
 extern void *cml_heap;
 extern void *cml_stack;
 extern void *cml_stackend;
@@ -46,9 +46,8 @@ void cml_clear() {
 }
 
 void init_pancake_mem() {
-    unsigned long sz = 1024;
-    unsigned long cml_heap_sz = sz;
-    unsigned long cml_stack_sz = sz;
+    unsigned long cml_heap_sz = 256;
+    unsigned long cml_stack_sz = 1024;
     cml_heap = cml_memory;
     cml_stack = cml_heap + cml_heap_sz;
     cml_stackend = cml_stack + cml_stack_sz;
