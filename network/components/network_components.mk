@@ -23,7 +23,7 @@ NETWORK_IMAGES:= network_virt_rx.elf network_virt_tx.elf arp.elf copy.elf
 network/components/%.o: ${SDDF}/network/components/%.c
 	${CC} ${CFLAGS} -c -o $@ $<
 
-NETWORK_COMPONENT_OBJ := $(addprefix network/components/, copy.o arp.o network_virt_tx.o network_virt_rx.o)
+NETWORK_COMPONENT_OBJ := $(addprefix network/components/, copyc.o network_virt_txc.o network_virt_rxc.o copy.o arp.o network_virt_tx.o network_virt_rx.o)
 
 CFLAGS_network += ${NUM_NETWORK_CLIENTS} -I${SDDF}/include/sddf/util
 
@@ -48,6 +48,12 @@ network/components/network_virt_rx.o: ${SDDF}/network/components/virt_rx.c
 network/components/network_virt_tx.o: ${SDDF}/network/components/virt_tx.c
 	${CC} ${CFLAGS} -c -o $@ $<
 
+network/components/network_virt_rxc.o: ${SDDF}/network/components/virt_rxc.c
+	${CC} ${CFLAGS} -c -o $@ $<
+
+network/components/network_virt_txc.o: ${SDDF}/network/components/virt_txc.c
+	${CC} ${CFLAGS} -c -o $@ $<
+
 COPY_PNK = ${UTIL}/util.🥞 \
 	${NETWORK_QUEUE_INCLUDE}/queue_helper.🥞 \
 	${NETWORK_QUEUE_INCLUDE}/queue.🥞 \
@@ -59,7 +65,7 @@ copy_pnk.o: copy_pnk.S
 copy_pnk.S: $(COPY_PNK)
 	cat $(COPY_PNK) | cpp -P | $(CAKE_COMPILER) --target=arm8 --pancake --main_return=true > $@
 
-copy.elf: copy_pnk.o network/components/copy.o pancake_ffi.o
+copy.elf: network/components/copyc.o
 	$(LD) $(LDFLAGS) $^ $(LIBS) -o $@
 
 NETWORK_VIRT_RX_PNK = ${UTIL}/util.🥞 \
@@ -73,7 +79,7 @@ network_virt_rx_pnk.o: network_virt_rx_pnk.S
 network_virt_rx_pnk.S: $(NETWORK_VIRT_RX_PNK)
 	cat $(NETWORK_VIRT_RX_PNK) | cpp -P | $(CAKE_COMPILER) --target=arm8 --pancake --main_return=true > $@
 
-network_virt_rx.elf: network_virt_rx_pnk.o network/components/network_virt_rx.o pancake_ffi.o
+network_virt_rx.elf: network/components/network_virt_rxc.o
 	$(LD) $(LDFLAGS) $^ $(LIBS) -o $@
 
 NETWORK_VIRT_TX_PNK = ${UTIL}/util.🥞 \
@@ -87,7 +93,7 @@ network_virt_tx_pnk.o: network_virt_tx_pnk.S
 network_virt_tx_pnk.S: $(NETWORK_VIRT_TX_PNK)
 	cat $(NETWORK_VIRT_TX_PNK) | cpp -P | $(CAKE_COMPILER) --target=arm8 --pancake --main_return=true > $@
 
-network_virt_tx.elf: network_virt_tx_pnk.o network/components/network_virt_tx.o pancake_ffi.o
+network_virt_tx.elf: network/components/network_virt_txc.o
 	$(LD) $(LDFLAGS) $^ $(LIBS) -o $@
 
 clean::
