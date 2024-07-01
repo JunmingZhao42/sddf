@@ -9,47 +9,47 @@
 
 #define MAX_PACKET_SIZE     1536
 
-#define get_eth_regs(eth_regs)      \
-    var addrs = @base + 40;         \
-    var eth_regs = lds {1} addrs;   \
+#define get_eth_regs(eth_regs)          \
+    var addrs = @base + 5 * WORD_SIZE;  \
+    var eth_regs = lds {1} addrs;       \
 
 #define get_hw_ring_buffer_vaddr(hw_ring_buffer_vaddr)  \
-    var addrs = @base + 48;                             \
+    var addrs = @base + 6 * WORD_SIZE;                  \
     var hw_ring_buffer_vaddr = lds {1} addrs;           \
 
 #define get_hw_ring_buffer_paddr(hw_ring_buffer_paddr)  \
-    var addrs = @base + 56;                             \
+    var addrs = @base + 7 * WORD_SIZE;                  \
     var hw_ring_buffer_paddr = lds {1} addrs;           \
 
 #define get_rx_free(rx_free)                            \
-    var addrs = @base + 64;                             \
+    var addrs = @base + 8 * WORD_SIZE;                  \
     var rx_free = lds {1} addrs;                        \
 
 #define get_rx_active(rx_active)                        \
-    var addrs = @base + 72;                             \
+    var addrs = @base + 9 * WORD_SIZE;                  \
     var rx_active = lds {1} addrs;                      \
 
 #define get_tx_free(tx_free)                            \
-    var addrs = @base + 80;                             \
+    var addrs = @base + 10 * WORD_SIZE;                 \
     var tx_free = lds {1} addrs;                        \
 
 #define get_tx_active(tx_active)                        \
-    var addrs = @base + 88;                             \
+    var addrs = @base + 11 * WORD_SIZE;                 \
     var tx_active = lds {1} addrs;                      \
 
 #define get_irq_mask(irq_mask)                          \
-    var addrs = @base + 96;                             \
+    var addrs = @base + 12 * WORD_SIZE;                 \
     var irq_mask = (lds {1} addrs) & MASK_32;           \
 
 #define set_irq_mask(irq_mask)                          \
-    var addrs = @base + 96;                             \
+    var addrs = @base + 12 * WORD_SIZE;                 \
     stw addrs, (irq_mask & MASK_32);                    \
 
 #define get_rx_queue(rx_queue)                          \
-    var rx_queue = @base + 104;                         \
+    var rx_queue = @base + 13 * WORD_SIZE;              \
 
 #define get_tx_queue(tx_queue)                          \
-    var tx_queue = @base + 128;                         \
+    var tx_queue = @base + 16 * WORD_SIZE;              \
 
 ////// helper functions for hw_ring_buffer
 /* HW ring buffer data type */
@@ -84,7 +84,7 @@ typedef struct {
 
 #define hw_ring_get_descr(descr, hw_ring)                                   \
     var addr = hw_ring + (2 * WORD_SIZE) + MAX_COUNT * NET_BUFF_DESC_SIZE;  \
-    var descr = lds {1} addr;                                                \
+    var descr = lds {1} addr;                                               \
 
 #define hw_ring_full(result, hw_ring, ring_size)    \
     hw_ring_get_tail(tail, hw_ring)                 \

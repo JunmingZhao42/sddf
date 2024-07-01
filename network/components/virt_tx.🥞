@@ -2,59 +2,59 @@
 #define CLIENT_CH 1
 #define NUM_NETWORK_CLIENTS 2 // TODO
 
-#define get_tx_free_drv(tx_free_drv)    \
-    var addr = @base + 40;              \
-    var tx_free_drv = lds {1} addr;     \
+#define get_tx_free_drv(tx_free_drv)        \
+    var addr = @base + 5 * WORD_SIZE;       \
+    var tx_free_drv = lds {1} addr;         \
 
-#define get_tx_active_drv(tx_active_drv)\
-    var addr = @base + 48;              \
-    var tx_active_drv = lds {1} addr;   \
+#define get_tx_active_drv(tx_active_drv)    \
+    var addr = @base + 6 * WORD_SIZE;       \
+    var tx_active_drv = lds {1} addr;       \
 
-#define get_tx_free_cli0(tx_free_cli0)  \
-    var addr = @base + 56;              \
-    var tx_free_cli0 = lds {1} addr;    \
+#define get_tx_free_cli0(tx_free_cli0)      \
+    var addr = @base + 7 * WORD_SIZE;       \
+    var tx_free_cli0 = lds {1} addr;        \
 
 #define get_tx_active_cli0(tx_active_cli0)  \
-    var addr = @base + 64;                  \
+    var addr = @base + 8 * WORD_SIZE;       \
     var tx_active_cli0 = lds {1} addr;      \
 
-#define get_tx_free_cli1(tx_free_cli1)  \
-    var addr = @base + 72;              \
-    var tx_free_cli1 = lds {1} addr;    \
+#define get_tx_free_cli1(tx_free_cli1)      \
+    var addr = @base + 9 * WORD_SIZE;       \
+    var tx_free_cli1 = lds {1} addr;        \
 
 #define get_tx_active_cli1(tx_active_cli1)  \
-    var addr = @base + 80;                  \
+    var addr = @base + 10 * WORD_SIZE;      \
     var tx_active_cli1 = lds {1} addr;      \
 
-#define get_buffer_data_region_cli0_vaddr(buffer_data_region_cli0_vaddr)\
-    var addr = @base + 88;                                              \
-    var buffer_data_region_cli0_vaddr = lds {1} addr;                   \
+#define get_buffer_data_region_cli0_vaddr(buffer_data_region_cli0_vaddr)    \
+    var addr = @base + 11 * WORD_SIZE;                                      \
+    var buffer_data_region_cli0_vaddr = lds {1} addr;                       \
 
 #define get_buffer_data_region_cli1_vaddr(buffer_data_region_cli1_vaddr)    \
-    var addr = @base + 96;                                                  \
+    var addr = @base + 12 * WORD_SIZE;                                      \
     var buffer_data_region_cli1_vaddr = lds {1} addr;                       \
 
 #define get_buffer_data_region_cli0_paddr(buffer_data_region_cli0_paddr)    \
-    var addr = @base + 104;                                                 \
+    var addr = @base + 13 * WORD_SIZE;                                      \
     var buffer_data_region_cli0_paddr = lds {1} addr;                       \
 
 #define get_buffer_data_region_cli1_paddr(buffer_data_region_cli1_paddr)    \
-    var addr = @base + 112;                                                 \
+    var addr = @base + 13 * WORD_SIZE;                                      \
     var buffer_data_region_cli1_paddr = lds {1} addr;                       \
 
-#define get_tx_queue_drv(tx_queue_drv)  \
-    var tx_queue_drv = @base + 120;     \
+#define get_tx_queue_drv(tx_queue_drv)              \
+    var tx_queue_drv = @base + 15 * WORD_SIZE;      \
 
 #define get_tx_queue_clients(queue_handle, client)                      \
     var queue_handle = @base + 144 + NET_QUEUE_HANDLE_SIZE * client;    \
 
-#define get_buffer_region_vaddrs(vaddrs, client)    \
-    var addr = @base + 192 + client * WORD_SIZE;    \
-    var vaddrs = lds {1} addr;                      \
+#define get_buffer_region_vaddrs(vaddrs, client)                \
+    var addr = @base + 24 * WORD_SIZE + client * WORD_SIZE;     \
+    var vaddrs = lds {1} addr;                                  \
 
-#define get_buffer_region_paddrs(paddrs, client)    \
-    var addr = @base + 208 + client * WORD_SIZE;    \
-    var paddrs = lds {1} addr;                      \
+#define get_buffer_region_paddrs(paddrs, client)                \
+    var addr = @base + 26 * WORD_SIZE + client * WORD_SIZE;     \
+    var paddrs = lds {1} addr;                                  \
 
 #define VIRT_TX_FUNC_BASE (@base + 224)
 

@@ -9,70 +9,70 @@
  #define BROADCAST_ID (NUM_NETWORK_CLIENTS + 1)
 
 /* Queue regions */
-#define get_rx_free_drv(rx_free_drv)    \
-    var addrs = @base + 40;             \
-    var rx_free_drv = lds {1} addrs;    \
+#define get_rx_free_drv(rx_free_drv)                \
+    var addrs = @base + 5 * WORD_SIZE;              \
+    var rx_free_drv = lds {1} addrs;                \
 
-#define get_rx_active_drv(rx_active_drv)\
-    var addrs = @base + 48;             \
-    var rx_active_drv = lds {1} addrs;  \
+#define get_rx_active_drv(rx_active_drv)            \
+    var addrs = @base + 6 * WORD_SIZE;              \
+    var rx_active_drv = lds {1} addrs;              \
 
-#define get_rx_free_cli0(rx_free_cli0)  \
-    var addrs = @base + 56;             \
-    var rx_free_cli0 = lds {1} addrs;   \
+#define get_rx_free_cli0(rx_free_cli0)              \
+    var addrs = @base + 7 * WORD_SIZE;              \
+    var rx_free_cli0 = lds {1} addrs;               \
 
-#define get_rx_active_cli0(rx_active_cli0)  \
-    var addrs = @base + 64;                 \
-    var rx_active_cli0 = lds {1} addrs;     \
+#define get_rx_active_cli0(rx_active_cli0)          \
+    var addrs = @base + 8 * WORD_SIZE;              \
+    var rx_active_cli0 = lds {1} addrs;             \
 
-#define get_rx_free_cli1(rx_free_cli1)  \
-    var addrs = @base + 72;             \
-    var rx_free_cli1 = lds {1} addrs;   \
+#define get_rx_free_cli1(rx_free_cli1)              \
+    var addrs = @base + 9 * WORD_SIZE;              \
+    var rx_free_cli1 = lds {1} addrs;               \
 
-#define get_rx_active_cli1(rx_active_cli1)  \
-    var addrs = @base + 80;                 \
-    var rx_active_cli1 = lds {1} addrs;     \
+#define get_rx_active_cli1(rx_active_cli1)          \
+    var addrs = @base + 10 * WORD_SIZE;             \
+    var rx_active_cli1 = lds {1} addrs;             \
 
 /* Buffer data regions */
 #define get_buffer_data_vaddr(buffer_data_vaddr)    \
-    var addrs = @base + 88;                         \
+    var addrs = @base + 11 * WORD_SIZE;             \
     var buffer_data_vaddr = lds {1} addrs;          \
 
 #define get_buffer_data_paddr(buffer_data_paddr)    \
-    var addrs = @base + 96;                         \
+    var addrs = @base + 12 * WORD_SIZE;             \
     var buffer_data_paddr = lds {1} addrs;          \
 
-#define get_notify_drv(notify_drv)      \
-    var addrs = @base + 104;            \
-    var notify_drv = lds {1} addrs;     \
+#define get_notify_drv(notify_drv)                  \
+    var addrs = @base + 13 * WORD_SIZE;             \
+    var notify_drv = lds {1} addrs;                 \
 
 // Boolean to indicate whether a packet has been enqueued
 // into the driver's free queue during notification handling
-#define set_notify_drv(notify_drv)      \
-    var addrs = @base + 104;            \
-    stw addrs, notify_drv;              \
+#define set_notify_drv(notify_drv)                  \
+    var addrs = @base + 13 * WORD_SIZE;             \
+    stw addrs, notify_drv;                          \
 
 // #define get_CONFIG_L1_CACHE_LINE_SIZE_BITS(CONFIG_L1_CACHE_LINE_SIZE_BITS) \
 //     var addrs = @base + WORD_SIZE * 14; \
 //     var CONFIG_L1_CACHE_LINE_SIZE_BITS = lds {1} addrs; \
 
-#define get_rx_queue_drv(rx_queue_drv)  \
-    var rx_queue_drv = @base + 120;     \
+#define get_rx_queue_drv(rx_queue_drv)              \
+    var rx_queue_drv = @base + 15 * WORD_SIZE;      \
 
-#define get_rx_queue_clients(queue_handle, client)                  \
-    var queue_handle = @base + 144 + client * NET_QUEUE_HANDLE_SIZE;\
+#define get_rx_queue_clients(queue_handle, client)                              \
+    var queue_handle = @base + 18 * WORD_SIZE + client * NET_QUEUE_HANDLE_SIZE; \
 
 #define get_mac_addrs_i(mac, client, i)                     \
     var addrs = @base + 192;                                \
     var mac = ld8 (addrs + (client * ETH_HWADDR_LEN) + i);  \
 
-#define get_buffer_refs(value, ref_index)   \
-    var addrs = @base + 208 + ref_index;    \
-    var value = ld8 addrs;                  \
+#define get_buffer_refs(value, ref_index)                   \
+    var addrs = @base + 26 * WORD_SIZE + ref_index;         \
+    var value = ld8 addrs;                                  \
 
-#define set_buffer_refs(value, ref_index)   \
-    var addrs = @base + 208 + ref_index;    \
-    st8 addrs, value;                       \
+#define set_buffer_refs(value, ref_index)                   \
+    var addrs = @base + 26 * WORD_SIZE + ref_index;         \
+    st8 addrs, value;                                       \
 
 #define VIRT_RX_FUNC_BASE (@base + 720)
 

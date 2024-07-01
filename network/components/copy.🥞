@@ -1,35 +1,35 @@
 #define VIRT_RX_CH 0
 #define CLIENT_CH 1
 
-#define get_rx_free_virt(rx_free_virt)                          \
-    var addr = @base + 40;              \
-    var rx_free_virt = lds {1} addr;    \
+#define get_rx_free_virt(rx_free_virt)          \
+    var addr = @base + 5 * WORD_SIZE;           \
+    var rx_free_virt = lds {1} addr;            \
 
-#define get_rx_active_virt(rx_active_virt)  \
-    var addr = @base + 48;                  \
-    var rx_active_virt = lds {1} addr;      \
+#define get_rx_active_virt(rx_active_virt)      \
+    var addr = @base + 6 * WORD_SIZE;           \
+    var rx_active_virt = lds {1} addr;          \
 
-#define get_rx_free_cli(rx_free_cli)    \
-    var addr = @base + 56;              \
-    var rx_free_cli = lds {1} addr;     \
+#define get_rx_free_cli(rx_free_cli)            \
+    var addr = @base + 7 * WORD_SIZE;           \
+    var rx_free_cli = lds {1} addr;             \
 
-#define get_rx_active_cli(rx_active_cli)    \
-    var addr = @base + 64;                  \
-    var rx_active_cli = lds {1} addr;       \
+#define get_rx_active_cli(rx_active_cli)        \
+    var addr = @base + 8 * WORD_SIZE;           \
+    var rx_active_cli = lds {1} addr;           \
 
 #define get_virt_buffer_data_region(virt_buffer_data_region)    \
-    var addr = @base + 72;                                      \
+    var addr = @base + 9 * WORD_SIZE;                           \
     var virt_buffer_data_region = lds {1} addr;                 \
 
-#define get_cli_buffer_data_region(cli_buffer_data_region)  \
-    var addr = @base + 80;                                  \
-    var cli_buffer_data_region = lds {1} addr;              \
+#define get_cli_buffer_data_region(cli_buffer_data_region)      \
+    var addr = @base + 10 * WORD_SIZE;                          \
+    var cli_buffer_data_region = lds {1} addr;                  \
 
-#define get_rx_queue_virt_handle(rx_queue_virt)     \
-    var rx_queue_virt = @base + 88;                 \
+#define get_rx_queue_virt_handle(rx_queue_virt)                 \
+    var rx_queue_virt = @base + 11 * WORD_SIZE;                 \
 
-#define get_rx_queue_cli_handle(rx_queue_cli)       \
-    var rx_queue_cli = @base + 112;                 \
+#define get_rx_queue_cli_handle(rx_queue_cli)                   \
+    var rx_queue_cli = @base + 14 * WORD_SIZE;                  \
 
 #define COPY_FUNC_BASE (@base + 160)
 
