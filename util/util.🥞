@@ -34,19 +34,29 @@
 #define QUEUE_HANDLE_SIZE 3
 
 /* Copy `len` bytes from src to dst */
-#define pnk_memcpy(dst, src, len)   \
-    @memcpy(dst, len, src, 0);      \
+// #define pnk_memcpy(dst, src, len)   \
+//     @memcpy(dst, len, src, 0);      \
 
-// fun pnk_memcpy(1 dst, 1 src, 1 len) {
-// 	var i = 0;
-//     var c = 0;
-//     while (i < len) {
-//         !ld8 c, (src + i);
-//         !st8 (dst + i), c;
-//         i = i + 1;
-//     }
-// 	return 0;
-// }
+fun pnk_memcpy(1 dst, 1 src, 1 len) {
+	var i = 0;
+    var word = 0;
+    // store words instead
+    pnk_modulo(remainder, len, WORD_SIZE)
+    var end = len - remainder;
+    while (i < end) {
+        !ldw word, (src + i * WORD_SIZE);
+        !stw (dst + i * WORD_SIZE), word;
+        i = i + WORD_SIZE;
+    }
+    // store the rest
+    var c = 0;
+    while (i < len) {
+        !ld8 c, (src + i);
+        !st8 (dst + i), c;
+        i = i + 1;
+    }
+	return 0;
+}
 
 // memset n bytes of src with character
 fun pnk_memset(1 src, 1 character, 1 n) {

@@ -74,7 +74,7 @@ fun rx_return() {
             var virt_addr = virt_buffer_data_region + io_or_offset;
 
             get_len(virt_buff_len, virt_buffer_addr)
-            pnk_memcpy(cli_addr, virt_addr, virt_buff_len)
+            pnk_memcpy(cli_addr, virt_addr, virt_buff_len);
 
             set_len(virt_buff_len, cli_buffer_addr)
             set_len(0, virt_buffer_addr)
