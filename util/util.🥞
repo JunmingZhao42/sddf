@@ -33,29 +33,30 @@
 // sizeof(serial_queue_handle_t) / WORD_SIZE
 #define QUEUE_HANDLE_SIZE 3
 
-/* Copy `len` bytes from src to dst */
-// #define pnk_memcpy(dst, src, len)   \
-//     @memcpy(dst, len, src, 0);      \
+// Returns a % b, asuming b = x^n for some x and n
+#define pnk_modulo(result, a, b)        \
+    var pnk_modulo_mask = b - 1;        \
+    var result = a & pnk_modulo_mask;   \
 
+/* Copy `len` bytes from src to dst */
 fun pnk_memcpy(1 dst, 1 src, 1 len) {
-	var i = 0;
-    var word = 0;
-    // store words instead
+    var i = 0;
+    var c = 0;
     pnk_modulo(remainder, len, WORD_SIZE)
+    // store 8 bytes at a time
     var end = len - remainder;
     while (i < end) {
-        !ldw word, (src + i * WORD_SIZE);
-        !stw (dst + i * WORD_SIZE), word;
+        !ldw c, (src + i);
+        !stw (dst + i), c;
         i = i + WORD_SIZE;
     }
     // store the rest
-    var c = 0;
     while (i < len) {
         !ld8 c, (src + i);
         !st8 (dst + i), c;
         i = i + 1;
     }
-	return 0;
+    return 0;
 }
 
 // memset n bytes of src with character
@@ -68,11 +69,6 @@ fun pnk_memset(1 src, 1 character, 1 n) {
     }
     return src;
 }
-
-// Returns a % b, asuming b = x^n for some x and n
-#define pnk_modulo(result, a, b)        \
-    var pnk_modulo_mask = b - 1;        \
-    var result = a & pnk_modulo_mask;   \
 
 #define microkit_notify(channel)        \
     @microkit_notify(0,channel,0,42);   \
