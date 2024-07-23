@@ -11,35 +11,35 @@
 
 #define get_eth_regs(eth_regs)          \
     var addrs = @base + 5 * WORD_SIZE;  \
-    var eth_regs = lds {1} addrs;       \
+    var eth_regs = lds 1 addrs;       \
 
 #define get_hw_ring_buffer_vaddr(hw_ring_buffer_vaddr)  \
     var addrs = @base + 6 * WORD_SIZE;                  \
-    var hw_ring_buffer_vaddr = lds {1} addrs;           \
+    var hw_ring_buffer_vaddr = lds 1 addrs;           \
 
 #define get_hw_ring_buffer_paddr(hw_ring_buffer_paddr)  \
     var addrs = @base + 7 * WORD_SIZE;                  \
-    var hw_ring_buffer_paddr = lds {1} addrs;           \
+    var hw_ring_buffer_paddr = lds 1 addrs;           \
 
 #define get_rx_free(rx_free)                            \
     var addrs = @base + 8 * WORD_SIZE;                  \
-    var rx_free = lds {1} addrs;                        \
+    var rx_free = lds 1 addrs;                        \
 
 #define get_rx_active(rx_active)                        \
     var addrs = @base + 9 * WORD_SIZE;                  \
-    var rx_active = lds {1} addrs;                      \
+    var rx_active = lds 1 addrs;                      \
 
 #define get_tx_free(tx_free)                            \
     var addrs = @base + 10 * WORD_SIZE;                 \
-    var tx_free = lds {1} addrs;                        \
+    var tx_free = lds 1 addrs;                        \
 
 #define get_tx_active(tx_active)                        \
     var addrs = @base + 11 * WORD_SIZE;                 \
-    var tx_active = lds {1} addrs;                      \
+    var tx_active = lds 1 addrs;                      \
 
 #define get_irq_mask(irq_mask)                          \
     var addrs = @base + 12 * WORD_SIZE;                 \
-    var irq_mask = (lds {1} addrs) & MASK_32;           \
+    var irq_mask = (lds 1 addrs) & MASK_32;           \
 
 #define set_irq_mask(irq_mask)                          \
     var addrs = @base + 12 * WORD_SIZE;                 \
@@ -84,7 +84,7 @@ typedef struct {
 
 #define hw_ring_get_descr(descr, hw_ring)                                   \
     var addr = hw_ring + (2 * WORD_SIZE) + MAX_COUNT * NET_BUFF_DESC_SIZE;  \
-    var descr = lds {1} addr;                                               \
+    var descr = lds 1 addr;                                               \
 
 #define hw_ring_full(result, hw_ring, ring_size)    \
     hw_ring_get_tail(tail, hw_ring)                 \
@@ -114,7 +114,7 @@ struct descriptor {
 #define descriptor_get_len(len, descr)      \
     var temp = ETH_FUNC_BASE;               \
     @transfer16(descr, 1, temp, 1);         \
-    var len = (lds {1} temp) & MASK_16;     \
+    var len = (lds 1 temp) & MASK_16;     \
 
 #define descriptor_set_len(len, descr)      \
     var temp = ETH_FUNC_BASE;               \
@@ -124,7 +124,7 @@ struct descriptor {
 #define descriptor_get_stat(stat, descr)    \
     var temp = ETH_FUNC_BASE;               \
     @transfer16(descr + 2, 1, temp, 1);     \
-    var stat = (lds {1} temp) & MASK_16;    \
+    var stat = (lds 1 temp) & MASK_16;    \
 
 #define descriptor_set_stat(stat, descr)    \
     var temp = ETH_FUNC_BASE;               \
@@ -134,7 +134,7 @@ struct descriptor {
 #define descriptor_get_addr(addr, descr)    \
     var temp = ETH_FUNC_BASE;               \
     @transfer32(descr + 4, 1, temp, 1);     \
-    var addr = (lds {1} temp) & MASK_32;    \
+    var addr = (lds 1 temp) & MASK_32;    \
 
 #define descriptor_set_addr(addr, descr)    \
     var temp = ETH_FUNC_BASE;               \

@@ -5,23 +5,23 @@
 // Return the address of the UART registers
 #define get_uart_base(regs) 				\
 	var uart_base = @base + WORD_SIZE * 15; \
-	var regs = lds {1} uart_base; 			\
+	var regs = lds 1 uart_base; 			\
 
 #define get_rx_data(rx_data) 					\
 	var rx_data_addr = @base + WORD_SIZE * 5; 	\
-	var rx_data = lds {1} rx_data_addr; 		\
+	var rx_data = lds 1 rx_data_addr; 		\
 
 #define get_tx_data(tx_data) 					\
 	var tx_data_addr = @base + WORD_SIZE * 6; 	\
-	var tx_data = lds {1} tx_data_addr; 		\
+	var tx_data = lds 1 tx_data_addr; 		\
 
 #define get_rx_queue(rx_queue) 					\
 	var rx_queue_addr = @base + WORD_SIZE * 7; 	\
-	var rx_rueue = lds {1} rx_queue_addr; 		\
+	var rx_rueue = lds 1 rx_queue_addr; 		\
 
 #define get_tx_queue(tx_queue) 					\
 	var tx_queue_addr = @base + WORD_SIZE * 8; 	\
-	var tx_queue = lds {1} tx_queue_addr; 		\
+	var tx_queue = lds 1 tx_queue_addr; 		\
 
 #define get_rx_queue_handle(rx_queue_handle) 	 \
 	var rx_queue_handle = @base + WORD_SIZE * 9; \
@@ -54,7 +54,7 @@ fun tx_provide() {
 				break;
 			}
 
-			var txd = lds {1} c_addr;
+			var txd = lds 1 c_addr;
 			set_imx_uart_regs_txd(txd, regs)
 			transferred = true;
 		}

@@ -13,23 +13,23 @@
 
 #define get_tx_queue_drv(queue_drv)     \
 	var addr = @base + WORD_SIZE * 5;   \
-	var queue_drv = lds {1} addr; 		\
+	var queue_drv = lds 1 addr; 		\
 
 #define get_tx_queue_cli0(queue_cli0)   \
 	var addr = @base + WORD_SIZE * 6;   \
-	var queue_cli0 = lds {1} addr; 		\
+	var queue_cli0 = lds 1 addr; 		\
 
 #define get_tx_data_drv(data_drv)       \
 	var addr = @base + WORD_SIZE * 7;   \
-	var data_drv = lds {1} addr; 		\
+	var data_drv = lds 1 addr; 		\
 
 #define get_tx_data_cli0(data_cli0)     \
 	var addr = @base + WORD_SIZE * 8;   \
-	var data_cli0 = lds {1} addr; 		\
+	var data_cli0 = lds 1 addr; 		\
 
 #define get_clients_colours(colours)    \
 	var addr = @base + WORD_SIZE * 9;   \
-	var colours = lds {1} addr; 		\
+	var colours = lds 1 addr; 		\
 
 #define get_tx_queue_handle_drv(queue_handle)   \
     var queue_handle = @base + WORD_SIZE * 10;  \
@@ -56,7 +56,7 @@ typedef struct tx_pending {
 
 #define tx_pending_queue_get_i(queue, i, tx_pending)    \
     var addr = tx_pending + (i * WORD_SIZE);            \
-    var queue = lds {1} addr;                           \
+    var queue = lds 1 addr;                           \
 
 #define tx_pending_queue_set_i(queue, i, tx_pending)    \
     var addr = tx_pending + (i * WORD_SIZE);            \
@@ -67,7 +67,7 @@ typedef struct tx_pending {
 
 #define tx_pending_clients_pending_get_i(clients_pending, i, tx_pending)            \
     var addr = tx_pending + (SERIAL_NUM_CLIENTS * WORD_SIZE) + (i * WORD_SIZE);     \
-    var clients_pending = lds {1} addr;                                             \
+    var clients_pending = lds 1 addr;                                             \
 
 #define tx_pending_clients_pending_set_i(clients_pending, i, tx_pending)            \
     var addr = tx_pending + (SERIAL_NUM_CLIENTS * WORD_SIZE) + (i * WORD_SIZE);     \
@@ -75,7 +75,7 @@ typedef struct tx_pending {
 
 #define tx_pending_get_head(head, tx_pending)                       \
     var addr = tx_pending + (SERIAL_NUM_CLIENTS * WORD_SIZE * 2);   \
-    var head = lds {1} addr;                                        \
+    var head = lds 1 addr;                                        \
 
 #define tx_pending_set_head(head, tx_pending)                       \
     var addr = tx_pending + (SERIAL_NUM_CLIENTS * WORD_SIZE * 2);   \
@@ -83,7 +83,7 @@ typedef struct tx_pending {
 
 #define tx_pending_get_tail(tail, tx_pending)                           \
     var addr = tx_pending + (SERIAL_NUM_CLIENTS * WORD_SIZE * 2) + 1;   \
-    var tail = lds {1} addr;                                            \
+    var tail = lds 1 addr;                                            \
 
 #define tx_pending_set_tail(tail, tx_pending)                           \
     var addr = tx_pending + (SERIAL_NUM_CLIENTS * WORD_SIZE * 2) + 1;   \
@@ -183,7 +183,7 @@ fun pnk_tx_return() {
     var req = 0;
     while (req < num_pending_tx) {
         tx_pending_pop(client_addr);
-        var client = lds {1} client_addr;
+        var client = lds 1 client_addr;
         var reprocess = true;
         var client_transferrred = false;
         while (reprocess) {

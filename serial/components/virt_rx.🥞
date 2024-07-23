@@ -14,23 +14,23 @@
 
 #define get_rx_queue_drv(queue_drv)     \
 	var addr = @base + WORD_SIZE * 5;   \
-	var queue_drv = lds {1} addr; 		\
+	var queue_drv = lds 1 addr; 		\
 
 #define get_rx_queue_cli0(queue_cli0)   \
 	var addr = @base + WORD_SIZE * 6;   \
-	var queue_cli0 = lds {1} addr; 		\
+	var queue_cli0 = lds 1 addr; 		\
 
 #define get_rx_data_drv(data_drv)       \
 	var addr = @base + WORD_SIZE * 7;   \
-	var data_drv = lds {1} addr; 		\
+	var data_drv = lds 1 addr; 		\
 
 #define get_rx_data_cli0(data_cli0)     \
 	var addr = @base + WORD_SIZE * 8;   \
-	var data_cli0 = lds {1} addr; 		\
+	var data_cli0 = lds 1 addr; 		\
 
 #define get_current_mode(mode)          \
 	var addr = @base + WORD_SIZE * 9;   \
-	var mode = lds {1} addr; 		    \
+	var mode = lds 1 addr; 		    \
 
 #define set_current_mode(mode)          \
     var addr = @base + WORD_SIZE * 9;   \
@@ -38,7 +38,7 @@
 
 #define get_current_client(client)      \
     var addr = @base + WORD_SIZE * 10;  \
-    var client = lds {1} addr; 		    \
+    var client = lds 1 addr; 		    \
 
 #define set_current_client(client)      \
     var addr = @base + WORD_SIZE * 10;  \
@@ -46,7 +46,7 @@
 
 #define get_next_client_index(index)    \
     var addr = @base + WORD_SIZE * 11;  \
-    var index = lds {1} addr; 		    \
+    var index = lds 1 addr; 		    \
 
 #define set_next_client_index(index)    \
     var addr = @base + WORD_SIZE * 11;  \
@@ -155,7 +155,7 @@ fun rx_return() {
                         get_rx_queue_handle_cli_i(qhandle, curr_c)
                         serial_require_producer_signal(signal, qhandle)
                         if (transferred && signal) {
-                            var local_tail = lds {1} local_tail_addr;
+                            var local_tail = lds 1 local_tail_addr;
                             serial_update_visible_tail(qhandle, local_tail);
                             serial_cancel_producer_signal(qhandle)
                             var ch = curr_c + CLIENT_OFFSET;
@@ -187,7 +187,7 @@ fun rx_return() {
             }
         }
 
-        var local_tail = lds {1} local_tail_addr;
+        var local_tail = lds 1 local_tail_addr;
         get_current_client(current_client)
         get_rx_queue_handle_cli_i(queue_handle, current_client)
         serial_update_visible_tail(queue_handle, local_tail);
