@@ -121,7 +121,7 @@ struct imx_uart_regs {
 	var offset = regs + RXD_OFFSET;        \
 	var temp = FUNC_BASE;                  \
 	@transfer_hw(offset, 1, temp, 1);      \
-	var rxd = (lds {1} temp) & MASK_HW;    \
+	var rxd = (lds 1 temp) & MASK_HW;    \
 
 #define set_imx_uart_regs_rxd(rxd, regs)   \
 	var offset = regs + RXD_OFFSET;        \
@@ -133,7 +133,7 @@ struct imx_uart_regs {
 	var offset = regs + TXD_OFFSET;        \
 	var temp = FUNC_BASE;				   \
 	@transfer_hw(offset, 1, temp, 1);      \
-	var txd = (lds {1} temp) & MASK_HW;    \
+	var txd = (lds 1 temp) & MASK_HW;    \
 
 #define set_imx_uart_regs_txd(txd, regs)   \
 	var offset = regs + TXD_OFFSET;        \
@@ -145,13 +145,13 @@ struct imx_uart_regs {
 	var offset = regs + CR1_OFFSET;        \
 	var temp = FUNC_BASE;                  \
 	@transfer_hw(offset, 1, temp, 1);      \
-	var cr1 = (lds {1} temp) & MASK_HW;    \
+	var cr1 = (lds 1 temp) & MASK_HW;    \
 
 #define reget_imx_uart_regs_cr1(cr1, regs) \
 	var offset = regs + CR1_OFFSET;        \
 	var temp = FUNC_BASE;                  \
 	@transfer_hw(offset, 1, temp, 1);      \
-	cr1 = (lds {1} temp) & MASK_HW;		   \
+	cr1 = (lds 1 temp) & MASK_HW;		   \
 
 #define set_imx_uart_regs_cr1(cr1, regs)   \
 	var offset = regs + CR1_OFFSET;        \
@@ -163,7 +163,7 @@ struct imx_uart_regs {
 	var offset = regs + CR2_OFFSET;        \
 	var temp = FUNC_BASE;                  \
 	@transfer_hw(offset, 1, temp, 1);      \
-	var cr2 = (lds {1} temp) & MASK_HW;	   \
+	var cr2 = (lds 1 temp) & MASK_HW;	   \
 
 #define set_imx_uart_regs_cr2(cr2, regs)   \
 	var offset = regs + CR2_OFFSET;        \
@@ -175,7 +175,7 @@ struct imx_uart_regs {
 	var offset = regs + CR3_OFFSET;        \
 	var temp = FUNC_BASE;                  \
 	@transfer_hw(offset, 1, temp, 1);      \
-	var cr3 = (lds {1} temp) & MASK_HW;	   \
+	var cr3 = (lds 1 temp) & MASK_HW;	   \
 
 #define set_imx_uart_regs_cr3(cr3, regs)   \
 	var offset = regs + CR3_OFFSET;        \
@@ -187,7 +187,7 @@ struct imx_uart_regs {
 	var offset = regs + CR4_OFFSET;        \
 	var temp = FUNC_BASE;                  \
 	@transfer_hw(offset, 1, temp, 1);      \
-	var cr4 = (lds {1} temp) & MASK_HW;	   \
+	var cr4 = (lds 1 temp) & MASK_HW;	   \
 
 #define set_imx_uart_regs_cr4(cr4, regs)   \
 	var offset = regs + CR4_OFFSET;        \
@@ -199,7 +199,7 @@ struct imx_uart_regs {
 	var offset = regs + FCR_OFFSET;        \
 	var temp = FUNC_BASE;                  \
 	@transfer_hw(offset, 1, temp, 1);      \
-	var fcr = (lds {1} temp) & MASK_HW;	   \
+	var fcr = (lds 1 temp) & MASK_HW;	   \
 
 #define set_imx_uart_regs_fcr(fcr, regs)   \
 	var offset = regs + FCR_OFFSET;        \
@@ -211,13 +211,13 @@ struct imx_uart_regs {
 	var offset = regs + SR1_OFFSET;        \
 	var temp = FUNC_BASE;                  \
 	@transfer_hw(offset, 1, temp, 1);      \
-	var sr1 = (lds {1} temp) & MASK_HW;	   \
+	var sr1 = (lds 1 temp) & MASK_HW;	   \
 
 #define reget_imx_uart_regs_sr1(sr1, regs) \
 	var offset = regs + SR1_OFFSET;        \
 	var temp = FUNC_BASE;                  \
 	@transfer_hw(offset, 1, temp, 1);      \
-	sr1 = (lds {1} temp) & MASK_HW;        \
+	sr1 = (lds 1 temp) & MASK_HW;        \
 
 #define set_imx_uart_regs_sr1(sr1, regs)   \
 	var offset = regs + SR1_OFFSET;        \
@@ -229,7 +229,7 @@ struct imx_uart_regs {
 	var offset = regs + SR2_OFFSET;        \
 	var temp = FUNC_BASE;                  \
 	@transfer_hw(offset, 1, temp, 1);      \
-	var sr2 = (lds {1} temp) & MASK_HW;    \
+	var sr2 = (lds 1 temp) & MASK_HW;    \
 
 #define set_imx_uart_regs_sr2(sr2, regs)   \
 	var offset = regs + SR2_OFFSET;        \
@@ -241,7 +241,7 @@ struct imx_uart_regs {
 	var offset = regs + ESC_OFFSET;        \
 	var temp = FUNC_BASE;                  \
 	@transfer_hw(offset, 1, temp, 1);      \
-	var esc = (lds {1} temp) & MASK_HW;    \
+	var esc = (lds 1 temp) & MASK_HW;    \
 
 #define set_imx_uart_regs_esc(esc, regs)   \
 	var offset = regs + ESC_OFFSET;        \
@@ -253,7 +253,7 @@ struct imx_uart_regs {
 	var offset = regs + TIM_OFFSET;        \
 	var temp = FUNC_BASE;                  \
 	@transfer_hw(offset, 1, temp, 1);      \
-	var tim = (lds {1} temp) & MASK_HW;    \
+	var tim = (lds 1 temp) & MASK_HW;    \
 
 #define set_imx_uart_regs_tim(tim, regs)   \
 	var offset = regs + TIM_OFFSET;        \
@@ -265,7 +265,7 @@ struct imx_uart_regs {
 	var offset = regs + BIR_OFFSET;        \
 	var temp = FUNC_BASE;                  \
 	@transfer_hw(offset, 1, temp, 1);      \
-	var bir = (lds {1} temp) & MASK_HW;    \
+	var bir = (lds 1 temp) & MASK_HW;    \
 
 #define set_imx_uart_regs_bir(bir, regs)   \
 	var offset = regs + BIR_OFFSET;        \
@@ -277,7 +277,7 @@ struct imx_uart_regs {
 	var offset = regs + BMR_OFFSET;        \
 	var temp = FUNC_BASE;                  \
 	@transfer_hw(offset, 1, temp, 1);      \
-	var bmr = (lds {1} temp) & MASK_HW;    \
+	var bmr = (lds 1 temp) & MASK_HW;    \
 
 #define set_imx_uart_regs_bmr(bmr, regs)   \
 	var offset = regs + BMR_OFFSET;        \
@@ -289,7 +289,7 @@ struct imx_uart_regs {
 	var offset = regs + BRC_OFFSET;        \
 	var temp = FUNC_BASE;                  \
 	@transfer_hw(offset, 1, temp, 1);      \
-	var brc = (lds {1} temp) & MASK_HW;	   \
+	var brc = (lds 1 temp) & MASK_HW;	   \
 
 #define set_imx_uart_regs_brc(brc, regs)   \
 	var offset = regs + BRC_OFFSET;        \
@@ -301,7 +301,7 @@ struct imx_uart_regs {
 	var offset = regs + ONEMS_OFFSET;        \
 	var temp = FUNC_BASE;                    \
 	@transfer_hw(offset, 1, temp, 1);        \
-	var onems = (lds {1} temp) & MASK_HW;    \
+	var onems = (lds 1 temp) & MASK_HW;    \
 
 #define set_imx_uart_regs_onems(onems, regs) \
 	var offset = regs + ONEMS_OFFSET;        \
@@ -313,7 +313,7 @@ struct imx_uart_regs {
 	var offset = regs + TS_OFFSET;         \
 	var temp = FUNC_BASE;                  \
 	@transfer_hw(offset, 1, temp, 1);      \
-	var ts = (lds {1} temp) & MASK_HW;     \
+	var ts = (lds 1 temp) & MASK_HW;     \
 
 #define set_imx_uart_regs_ts(ts, regs)     \
 	var offset = regs + TS_OFFSET;         \

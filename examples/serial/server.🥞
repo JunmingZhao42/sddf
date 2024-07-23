@@ -2,19 +2,19 @@
 
 #define get_rx_data(rx_data)                    \
 	var rx_data_addr = @base + WORD_SIZE * 5;   \
-	var rx_data = lds {1} rx_data_addr;         \
+	var rx_data = lds 1 rx_data_addr;         \
 
 #define get_tx_data(tx_data)                    \
 	var tx_data_addr = @base + WORD_SIZE * 6;   \
-	var tx_data = lds {1} tx_data_addr;         \
+	var tx_data = lds 1 tx_data_addr;         \
 
 #define get_rx_queue(rx_queue)                  \
 	var rx_queue_addr = @base + WORD_SIZE * 7;  \
-	var rx_rueue = lds {1} rx_queue_addr;       \
+	var rx_rueue = lds 1 rx_queue_addr;       \
 
 #define get_tx_queue(tx_queue)                  \
 	var tx_queue_addr = @base + WORD_SIZE * 8;  \
-	var tx_queue = lds {1} tx_queue_addr;       \
+	var tx_queue = lds 1 tx_queue_addr;       \
 
 #define get_rx_queue_handle(rx_queue_handle)        \
 	var rx_queue_handle = @base + WORD_SIZE * 9;    \
@@ -24,25 +24,25 @@
 
 #define get_local_head(local_head)                  \
     var local_head_addr = @base + WORD_SIZE * 15;   \
-    var local_head = lds {1} local_head_addr;       \
+    var local_head = lds 1 local_head_addr;       \
 
 #define get_local_head_addr(local_head_addr)        \
     var local_head_addr = @base + WORD_SIZE * 15;   \
 
 #define get_local_tail(local_tail)                  \
     var local_tail_addr = @base + WORD_SIZE * 16;   \
-    var local_tail = lds {1} local_tail_addr;       \
+    var local_tail = lds 1 local_tail_addr;       \
 
 #define get_local_tail_addr(local_tail_addr)        \
     var local_tail_addr = @base + WORD_SIZE * 16;   \
 
 #define get_char_count(char_count)                  \
     var char_count_addr = @base + WORD_SIZE * 17;   \
-    var char_count = lds {1} char_count_addr;       \
+    var char_count = lds 1 char_count_addr;       \
 
 #define incr_char_count()                           \
     var char_count_addr = @base + WORD_SIZE * 17;   \
-    var char_count = lds {1} char_count_addr;       \
+    var char_count = lds 1 char_count_addr;       \
     stw char_count_addr, char_count + 1;            \
 
 fun main() {
@@ -58,7 +58,7 @@ export fun pnk_notified(1 channel) {
         var head_addr = queue + WORD_SIZE;
         var 1 dq_ret = serial_dequeue(rx_queue_handle, head_addr, c_addr);
         while (dq_ret == 0) {
-            var c = (lds {1} c_addr) & CHAR_MASK;
+            var c = (lds 1 c_addr) & CHAR_MASK;
             if (c == 13) { // '\r'
                 // TODO: this new line is not working
                 sddf_putchar_unbuffered(13); // '\r'
