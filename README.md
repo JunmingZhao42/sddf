@@ -1,3 +1,5 @@
+(This is an outdated version of sDDF, check branch `pancake_serial_new` for updateded serial driver and `pancake_echo` for updated ethernet driver.)
+
 # Brief Intro
 This is a learning exercise to get acquainted with the sDDF. A basic serial driver has been implemented in pancake, with printf, getchar and scanf.
 
