@@ -95,20 +95,14 @@ void init_pancake_mem() {
 
 void init_pancake_data() {
     uintptr_t *heap = (uintptr_t *)cml_heap;
-    heap[5] = eth_regs;
-    heap[6] = hw_ring_buffer_vaddr;
-    heap[7] = hw_ring_buffer_paddr;
-    heap[8] = rx_free;
-    heap[9] = rx_active;
-    heap[10] = tx_free;
-    heap[11] = tx_active;
-    irq_mask = (uint64_t *) &heap[12];
+    heap[0] = eth_regs;
+    irq_mask = (uint64_t *) &heap[1];
     *irq_mask = IRQ_MASK;
-    rx_queue = (net_queue_handle_t *) &heap[13];
-    tx_queue = (net_queue_handle_t *) &heap[16];
-    hw_ring_rx = (hw_ring_t *) &heap[19];
+    rx_queue = (net_queue_handle_t *) &heap[3];
+    tx_queue = (net_queue_handle_t *) &heap[6];
+    hw_ring_rx = (hw_ring_t *) &heap[9];
     int offset = sizeof(hw_ring_t);
-    hw_ring_tx = (hw_ring_t *) ((char *) &heap[19] + offset);
+    hw_ring_tx = (hw_ring_t *) ((char *) &heap[9] + offset);
 }
 
 static void eth_setup(void)

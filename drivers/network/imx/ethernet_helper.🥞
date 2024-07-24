@@ -154,20 +154,6 @@ struct enet_regs {
 };
 */
 
-/*
-
-       ┌─────┬──────────────────┬─────────────────┬───────────┬──────────┬─────────────────┐
-       │ 120 │                  │                 │ helper    │          │                 │
-       │bytes│    hw_ring_rx    │   hw_ring_tx    │ funcs     │          │   1024 bytes    │
-       │     │    4120 bytes    │   4120 bytes    │ heap      │          │                 │
-       │     │                  │                 │ 128       │          │                 │
-       │     │                  │                 │ bytes     │          │                 │
-       └─────┴──────────────────┴─────────────────┴───────────┴──────────┴─────────────────┘
-  cml_heap                                        ▲
-                                                  │                cml_stack =
-                                                  │                cml_heap[9*1024]
-                                         cml_heap[8*1024+168]
-*/
 #define ETH_FUNC_BASE                   @base + 8360
 
 #define EIR_OFFSET                      4
@@ -179,7 +165,7 @@ struct enet_regs {
     var offset = eth + EIR_OFFSET;      \
     var temp = ETH_FUNC_BASE;           \
     @transfer32(offset, 1, temp, 0);    \
-	var eir = (lds 1 temp) & MASK_32; \
+	var eir = (lds 1 temp) & MASK_32;   \
 
 #define set_eth_eir(eir, eth)           \
     var offset = eth + EIR_OFFSET;      \
@@ -203,7 +189,7 @@ struct enet_regs {
     var offset = eth + TDAR_OFFSET;     \
     var temp = ETH_FUNC_BASE;           \
     @transfer32(offset, 1, temp, 0);    \
-	var tdar = (lds 1 temp) & MASK_32;\
+	var tdar = (lds 1 temp) & MASK_32;  \
 
 #define set_eth_tdar(tdar, eth)         \
     var offset = eth + TDAR_OFFSET;     \

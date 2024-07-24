@@ -4,52 +4,28 @@
 
 #define RX_COUNT 256
 #define TX_COUNT 256
-// #define MAX_COUNT MAX(RX_COUNT, TX_COUNT)
 #define MAX_COUNT 256
 
 #define MAX_PACKET_SIZE     1536
 
-#define get_eth_regs(eth_regs)          \
-    var addrs = @base + 5 * WORD_SIZE;  \
-    var eth_regs = lds 1 addrs;       \
+#define get_eth_regs(eth_regs)  \
+    var addrs = @base;          \
+    var eth_regs = lds 1 addrs; \
 
-#define get_hw_ring_buffer_vaddr(hw_ring_buffer_vaddr)  \
-    var addrs = @base + 6 * WORD_SIZE;                  \
-    var hw_ring_buffer_vaddr = lds 1 addrs;           \
+// todo: newer sddf doesn't have this irq_mask variable anymore
+#define get_irq_mask(irq_mask)              \
+    var addrs = @base + WORD_SIZE;          \
+    var irq_mask = (lds 1 addrs) & MASK_32; \
 
-#define get_hw_ring_buffer_paddr(hw_ring_buffer_paddr)  \
-    var addrs = @base + 7 * WORD_SIZE;                  \
-    var hw_ring_buffer_paddr = lds 1 addrs;           \
+#define set_irq_mask(irq_mask)              \
+    var addrs = @base + WORD_SIZE;          \
+    stw addrs, (irq_mask & MASK_32);        \
 
-#define get_rx_free(rx_free)                            \
-    var addrs = @base + 8 * WORD_SIZE;                  \
-    var rx_free = lds 1 addrs;                        \
+#define get_rx_queue(rx_queue)              \
+    var rx_queue = @base + 3 * WORD_SIZE;   \
 
-#define get_rx_active(rx_active)                        \
-    var addrs = @base + 9 * WORD_SIZE;                  \
-    var rx_active = lds 1 addrs;                      \
-
-#define get_tx_free(tx_free)                            \
-    var addrs = @base + 10 * WORD_SIZE;                 \
-    var tx_free = lds 1 addrs;                        \
-
-#define get_tx_active(tx_active)                        \
-    var addrs = @base + 11 * WORD_SIZE;                 \
-    var tx_active = lds 1 addrs;                      \
-
-#define get_irq_mask(irq_mask)                          \
-    var addrs = @base + 12 * WORD_SIZE;                 \
-    var irq_mask = (lds 1 addrs) & MASK_32;           \
-
-#define set_irq_mask(irq_mask)                          \
-    var addrs = @base + 12 * WORD_SIZE;                 \
-    stw addrs, (irq_mask & MASK_32);                    \
-
-#define get_rx_queue(rx_queue)                          \
-    var rx_queue = @base + 13 * WORD_SIZE;              \
-
-#define get_tx_queue(tx_queue)                          \
-    var tx_queue = @base + 16 * WORD_SIZE;              \
+#define get_tx_queue(tx_queue)              \
+    var tx_queue = @base + 6 * WORD_SIZE;   \
 
 ////// helper functions for hw_ring_buffer
 /* HW ring buffer data type */
@@ -84,7 +60,7 @@ typedef struct {
 
 #define hw_ring_get_descr(descr, hw_ring)                                   \
     var addr = hw_ring + (2 * WORD_SIZE) + MAX_COUNT * NET_BUFF_DESC_SIZE;  \
-    var descr = lds 1 addr;                                               \
+    var descr = lds 1 addr;                                                 \
 
 #define hw_ring_full(result, hw_ring, ring_size)    \
     hw_ring_get_tail(tail, hw_ring)                 \
@@ -114,7 +90,7 @@ struct descriptor {
 #define descriptor_get_len(len, descr)      \
     var temp = ETH_FUNC_BASE;               \
     @transfer16(descr, 1, temp, 1);         \
-    var len = (lds 1 temp) & MASK_16;     \
+    var len = (lds 1 temp) & MASK_16;       \
 
 #define descriptor_set_len(len, descr)      \
     var temp = ETH_FUNC_BASE;               \
@@ -124,7 +100,7 @@ struct descriptor {
 #define descriptor_get_stat(stat, descr)    \
     var temp = ETH_FUNC_BASE;               \
     @transfer16(descr + 2, 1, temp, 1);     \
-    var stat = (lds 1 temp) & MASK_16;    \
+    var stat = (lds 1 temp) & MASK_16;      \
 
 #define descriptor_set_stat(stat, descr)    \
     var temp = ETH_FUNC_BASE;               \
@@ -134,7 +110,7 @@ struct descriptor {
 #define descriptor_get_addr(addr, descr)    \
     var temp = ETH_FUNC_BASE;               \
     @transfer32(descr + 4, 1, temp, 1);     \
-    var addr = (lds 1 temp) & MASK_32;    \
+    var addr = (lds 1 temp) & MASK_32;      \
 
 #define descriptor_set_addr(addr, descr)    \
     var temp = ETH_FUNC_BASE;               \
@@ -143,11 +119,11 @@ struct descriptor {
 
 
 ///// ^^ helper function finished
-#define get_hw_ring_rx(hw_ring_rx)      \
-    var hw_ring_rx = @base + 152;       \
+#define get_hw_ring_rx(hw_ring_rx)          \
+    var hw_ring_rx = @base + 9 * WORD_SIZE; \
 
 #define get_hw_ring_tx(hw_ring_tx)                          \
-    var hw_ring_tx = @base + WORD_SIZE * 19 + HW_RING_SIZE; \
+    var hw_ring_tx = @base + 9 * WORD_SIZE + HW_RING_SIZE;  \
 
 #define enable_irqs(mask)       \
     get_eth_regs(eth)           \
@@ -174,6 +150,13 @@ fun main () {
     return 0;
 }
 
+/*
+ * `rx_return()`: Transfer "active buffer" from device to `virt_rx`
+ * 1. check if `hw_ring_rx` is not empty; if not then exit
+ * 2. get a buffer from `head` slot of `hw_ring_rx`, make sure its status is non-empty; if not then exit
+ * 3. increment `hw_ring_rx` head, enqueue the buffer to `rx_active`
+ * 4. if `rx_active` requires signalling, cancel the signal and notify `virt_rx` via microkit
+ */
 fun rx_return() {
     var packets_transferred = false;
     get_hw_ring_rx(hw_ring_rx)
@@ -217,6 +200,15 @@ fun rx_return() {
     return 0;
 }
 
+/*
+ * `rx_provide()`: Transfer "free buffer" from `virt_rx` to device
+ * 1. check if `hw_ring_rx` is not full, and `rx_queue` is not empty;  if not then exit
+ * 2. dequeue a buffer from `rx_free`, update the buffer stat
+ * 3. update the tail slot of `hw_ring_rx` to this buffer, increment `hw_ring_rx` tail
+ * 4. set device `rdar` register
+ * 5. set `rx_free` as require signalling if `hw_ring_rx` is not full
+ * 6. recheck (1), process more if needed
+*/
 fun rx_provide() {
     var reprocess = true;
     get_hw_ring_rx(hw_ring_rx)
@@ -288,6 +280,15 @@ fun rx_provide() {
     return 0;
 }
 
+/*
+ * `tx_provide()`: Transfer "active buffer" from `virt_tx` to device
+ * 1. check if `hw_ring_tx` is not full, and `tx_active` is not empty; if not then exit
+ * 2. dequeue a buffer from `tx_active`, update the buffer stat
+ * 3. update the tail slot of `hw_ring_tx` to this buffer, increment `hw_ring_tx` tail
+ * 4. set device `tdar` register
+ * 5. set `tx_active` as require signalling
+ * 6. recheck (1), process more if needed
+ */
 fun tx_provide() {
     var reprocess = true;
     get_hw_ring_tx(hw_ring_tx)
@@ -318,8 +319,7 @@ fun tx_provide() {
 
             get_io_or_offset(io_or_offset, buffer_addr)
             get_len(len, buffer_addr)
-            // update_ring_slot(hw_ring_tx, hw_tail, io_or_offset, len, stat)
-            @update_ring_slot_tx(hw_tail, io_or_offset, len, stat);
+            update_ring_slot(hw_ring_tx, hw_tail, io_or_offset, len, stat)
 
             hw_tail = hw_tail + 1;
             pnk_modulo(mod, hw_tail, TX_COUNT)
@@ -344,6 +344,13 @@ fun tx_provide() {
     return 0;
 }
 
+/*
+ * `tx_return()`: Transfer "free buffer" from device to `virt_tx`
+ * 1. check  if `hw_ring_tx` is not empty; if not then exit
+ * 2. get a buffer from `head` slot of `hw_ring_tx`, make sure it's been processed by the device; if not then exit
+ * 3. increment `hw_ring_tx` head, reset the buffer length, enqueue the buffer to `tx_free`
+ * 4. if `rx_free` requires signalling, cancel the signal and notify `virt_tx` via microkit
+ */
 fun tx_return() {
     var enqueued = false;
     get_tx_queue(tx_queue)
