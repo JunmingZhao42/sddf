@@ -1,3 +1,44 @@
+/* Pancake heap layout
+
+              pancake heap 1024*9 bytes
+             +--------------------------+
+      [0..7] | eth regs addr            |
+             +--------------------------+
+     [9..31] | rx_queue {               |
+             | free buffer ptr          +---->
+             | active buffer ptr        +----> shared mem with virt_rx
+             | queue size               |
+             |}                         |
+             +--------------------------+
+    [32..55] | tx queue {               |
+             | free buffer ptr          +---->
+             | active buffer ptr        +----> shared mem with virt_tx
+             | queue size               |
+             |}                         |
+             +--------------------------+
+  [56..4175] | hw_ring tx {             |
+             |  tail index              |
+             |  head index              |
+             |  buffers meta data       |
+             |  buffer descriptors ptr  +----> shared mem with device
+             | }                        |
+             +--------------------------+
+[4176..8295] | hw_ring rx {             |
+             |  tail index              |
+             |  head index              |
+             |  buffers meta data       |
+             |  buffer descriptors ptr  +----> shared mem with device
+             | }                        |
+             +--------------------------+
+ [8296..9216]| dynamic heap             |
+             |                          |
+             |                          |
+             |                          |
+             |                          |
+             |                          |
+             +--------------------------+
+ */
+
 #define IRQ_CH 0
 #define TX_CH  1
 #define RX_CH  2
