@@ -122,6 +122,7 @@ struct descriptor {
 #define get_hw_ring_tx(hw_ring_tx)                      \
     var hw_ring_tx = @base + 9 * @biw + HW_RING_SIZE;   \
 
+// Todo: change this hack once !st16/!ld16 is supported in pancake
 #define update_ring_slot(hw_ring, idx, phys, len, stat)     \
     hw_ring_get_descr(descr, hw_ring)                       \
     var dst_addr = descr + idx * DESCRIPTROR_SIZE;          \
@@ -146,6 +147,8 @@ fun rx_return() {
     var packets_transferred = false;
     get_hw_ring_rx(hw_ring_rx)
     get_rx_queue(rx_queue)
+    get_active_queue(rx_active, rx_queue)
+    get_size(size, rx_queue)
 
     while (true) {
         hw_ring_empty(empty, hw_ring_rx, RX_COUNT)
@@ -170,8 +173,7 @@ fun rx_return() {
         st buffer_addr + @biw, len;
 
         var buffer = lds {1,1} buffer_addr;
-        var 1 err = net_enqueue_active(rx_queue, buffer);
-        assert(!err)
+        var 1 err = net_enqueue(rx_active, size, buffer);
 
         packets_transferred = true;
         var new_head = head + 1;
@@ -179,9 +181,9 @@ fun rx_return() {
         hw_ring_set_head(mod, hw_ring_rx)
     }
 
-    net_require_signal_active(signal, rx_queue)
+    net_require_signal(signal, rx_active)
     if (packets_transferred && signal) {
-        net_cancel_signal_active(rx_queue)
+        net_cancel_signal(rx_active)
         microkit_notify(RX_CH)
     }
     return 0;
@@ -200,19 +202,20 @@ fun rx_provide() {
     var reprocess = true;
     get_hw_ring_rx(hw_ring_rx)
     get_rx_queue(rx_queue)
+    get_size(size, rx_queue)
+    get_free_queue(rx_free, rx_queue)
     get_eth_regs(eth)
 
     while (reprocess) {
         while (true) {
             hw_ring_full(full, hw_ring_rx, RX_COUNT)
-            net_queue_empty_free(empty, rx_queue)
+            net_queue_empty(empty, rx_free)
             if (full || empty) {
                 break;
             }
 
             var buffer_addr = ETH_FUNC_BASE + 512;
-            var 1 err = net_dequeue_free(rx_queue, buffer_addr);
-            assert(!err)
+            var 1 err = net_dequeue(rx_free, size, buffer_addr);
 
             var stat = RXD_EMPTY; // uint16_t
             hw_ring_get_tail(hw_tail, hw_ring_rx)
@@ -238,17 +241,17 @@ fun rx_provide() {
         // Only request a notification from virtualiser if HW ring not full
         hw_ring_full(full, hw_ring_rx, RX_COUNT)
         if (!full) {
-            net_request_signal_free(rx_queue)
+            net_request_signal(rx_free)
         } else {
-            net_cancel_signal_free(rx_queue)
+            net_cancel_signal(rx_free)
         }
 
         reprocess = false;
 
-        net_queue_empty_free(empty, rx_queue)
+        net_queue_empty(empty, rx_free)
         hw_ring_full(full, hw_ring_rx, RX_COUNT)
         if ((!empty) && (!full)) {
-            net_cancel_signal_free(rx_queue)
+            net_cancel_signal(rx_free)
             reprocess = true;
         }
     }
@@ -268,19 +271,20 @@ fun tx_provide() {
     var reprocess = true;
     get_hw_ring_tx(hw_ring_tx)
     get_tx_queue(tx_queue)
+    get_size(size, tx_queue)
+    get_active_queue(tx_active, tx_queue)
     get_eth_regs(eth)
 
     while (reprocess) {
         while (true) {
             hw_ring_full(full, hw_ring_tx, TX_COUNT)
-            net_queue_empty_active(empty, tx_queue)
+            net_queue_empty(empty, tx_active)
             if (full || empty) {
                 break;
             }
 
             var buffer_addr = ETH_FUNC_BASE + 512;
-            var 1 err = net_dequeue_active(tx_queue, buffer_addr);
-            assert(!err)
+            var 1 err = net_dequeue(tx_active, size, buffer_addr);
 
             var stat = TXD_READY | TXD_ADDCRC | TXD_LAST; // uint16_t
             hw_ring_get_tail(hw_tail, hw_ring_tx)
@@ -303,13 +307,13 @@ fun tx_provide() {
             set_eth_tdar(TDAR_TDAR, eth)
         }
 
-        net_request_signal_active(tx_queue)
+        net_request_signal(tx_active)
         reprocess = false;
 
         hw_ring_full(full, hw_ring_tx, TX_COUNT)
-        net_queue_empty_active(empty, tx_queue)
+        net_queue_empty(empty, tx_active)
         if ((!full) && (!empty)) {
-            net_cancel_signal_active(tx_queue)
+            net_cancel_signal(tx_active)
             reprocess = true;
         }
     }
@@ -327,6 +331,8 @@ fun tx_return() {
     var enqueued = false;
     get_tx_queue(tx_queue)
     get_hw_ring_tx(hw_ring_tx)
+    get_size(size, tx_queue)
+    get_free_queue(tx_free, tx_queue)
 
     while (true) {
         hw_ring_empty(empty, hw_ring_tx, TX_COUNT)
@@ -354,15 +360,14 @@ fun tx_return() {
         hw_ring_set_head(mod, hw_ring_tx)
 
         var buffer = lds {1,1} buff;
-        var 1 err = net_enqueue_free(tx_queue, buffer);
-        assert(!err)
+        var 1 err = net_enqueue(tx_free, size, buffer);
         enqueued = true;
     }
 
 
-    net_require_signal_free(signal, tx_queue)
+    net_require_signal(signal, tx_free)
     if (enqueued && signal) {
-        net_cancel_signal_free(tx_queue)
+        net_cancel_signal(tx_free)
         microkit_notify(TX_CH)
     }
     return 0;
