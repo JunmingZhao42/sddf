@@ -1,70 +1,11 @@
+// Note: this util.🥞 only includes helper functions and constants
+// needed for ethernet driver for verification purposes.
+// Other functions and constants are included in util2.🥞 and
+// to be updated later.
+
 #define BIT(nr) (1 << nr)
-
-////////////////////////////////////////
-// Constants
-// TODO: Move to the corresponding files
-#define ETH_HWADDR_LEN                  6
-#define NETIF_SIZE                      1
-#define LWIP_STATE_SIZE                 20
-#define NET_BUFFER_SIZE                 2048
-#define LOG_NET_BUFFER_SIZE             11
-#define NUM_NETWORK_CLIENTS             2
-// TODO
-#define CONFIG_L1_CACHE_LINE_SIZE_BITS  6
-
-#define NET_RX_QUEUE_SIZE_DRIV                   512
-#define NET_RX_QUEUE_SIZE_CLI0                   512
-#define NET_RX_QUEUE_SIZE_CLI1                   512
-#define NET_RX_QUEUE_SIZE_COPY0                  NET_RX_QUEUE_SIZE_DRIV
-#define NET_RX_QUEUE_SIZE_COPY1                  NET_RX_QUEUE_SIZE_DRIV
-
-////////////////////////////////////////
-#define MASK_32         4294967295
 #define MASK_16         65535
-#define CHAR_MASK       255
 #define BYTE_MASK       255
-#define UINT32_MAX      4294967295
-
-// todo: get rid of these serial driver constants below
-#define STATIC_AREA_SIZE 256
-#define FUNC_BASE @base + STATIC_AREA_SIZE
-#define QUEUE_HANDLE_SIZE 3
-
-#define NUM_BUFFERS 512
-#define BUFFER_SIZE 1024
-
-/* Copy `len` bytes from src to dst */
-// #define pnk_memcpy(dst, src, len)   \
-//     @memcpy(dst, len, src, 0);      \
-
-fun pnk_memcpy(1 dst, 1 src, 1 len) {
-    @memcpy(dst, len, src, 0);
-	return 0;
-}
-
-// memset n bytes of src with character
-fun pnk_memset(1 src, 1 character, 1 n) {
-    var p = src;
-    var end = src + n;
-    while (p < end) {
-        !st8 p, character;
-        p = p + 1;
-    }
-    return src;
-}
-
-#define get16(half, addr)               \
-    var half1 = 0;                      \
-    var half2 = 0;                      \
-    !ld8 half1, addr;                   \
-    !ld8 half2, addr + 1;               \
-    var half = (half2 << 8) | half1;    \
-
-#define set16(half, addr)               \
-    var half1 = half & BYTE_MASK;       \
-    var half2 = (half >> 8) & BYTE_MASK;\
-    !st8 addr, half1;                   \
-    !st8 addr + 1, half2;               \
 
 // Returns a % b, asuming b = x^n for some x and n
 #define pnk_modulo(result, a, b)        \
@@ -85,74 +26,3 @@ fun pnk_memset(1 src, 1 character, 1 n) {
 
 #define microkit_deferred_notify(channel)        \
     @microkit_deferred_notify(0,channel,0,0);    \
-
-#define pnk_isdigit(result, character)  \
-    var r1 = (character >= 48);         \
-    var r2 = (character <= 57);         \
-    var result = (r1 && r2);            \
-
-#define pnk_isspace(result, character)                  \
-    var r1 = (character == 32);                         \
-    var r2 = (character == 9);                          \
-    var r3 = (character == 10);                         \
-    var r4 = (character == 13);                         \
-    var r5 = (character == 11);                         \
-    var r6 = (character == 12);                         \
-    var result = (r1 || r2 || r3 || r4 || r5 || r6);    \
-
-fun pnk_atoi(1 str_addr) {
-    var p = str_addr;
-
-    while (true) {
-        var c = ld8 p;
-        pnk_isspace(isspace, c)
-        if (isspace) {
-            p = p + 1;
-        } else {
-            break;
-        }
-    }
-
-    var sign = 1;
-    var c = ld8 p;
-    if (c == 43) {
-        p = p + 1;
-    } else {
-        if (c == 45) {
-            sign = -1;
-            p = p + 1;
-        }
-    }
-
-    var result = 0;
-
-    while (true) {
-        c = ld8 p;
-        pnk_isdigit(isdigit, c)
-        if (isdigit) {
-            var digit = c - 48;
-            result = result * 10;
-            result = result - digit;
-            p = p + 1;
-        } else {
-            break;
-        }
-    }
-
-    result = 0 - result;
-    return sign * result;
-}
-
-#define cache_clean(start, end)     \
-    @cache_clean(start, 1, end, 1); \
-
-#define cache_clean_and_invalidate(start, end)      \
-    @cache_clean_and_invalidate(start, 1, end, 1);  \
-
-#define pnk_round_up(result, value, multiple)   \
-    pnk_modulo(remainder, value, multiple)      \
-    var result = value;                         \
-    if (remainder != 0) {                       \
-        result = value + multiple - remainder;  \
-    }                                           \
-
