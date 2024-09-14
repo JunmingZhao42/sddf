@@ -113,7 +113,7 @@ struct descriptor {
     uint32_t addr;
 };
 */
-#define DESCRIPTROR_SIZE  8
+#define DESCRIPTOR_SIZE  8
 
 ///// ^^ helper function finished
 #define get_hw_ring_rx(hw_ring_rx)      \
@@ -125,7 +125,7 @@ struct descriptor {
 // Todo: change this hack once !st16/!ld16 is supported in pancake
 #define update_ring_slot(hw_ring, idx, phys, len, stat)     \
     hw_ring_get_descr(descr, hw_ring)                       \
-    var dst_addr = descr + idx * DESCRIPTROR_SIZE;          \
+    var dst_addr = descr + idx * DESCRIPTOR_SIZE;          \
     var descriptor = (stat << 16) | len;                    \
     !st32 dst_addr, descriptor;                             \
     !st32 dst_addr + 4, phys;                               \
@@ -156,10 +156,10 @@ fun rx_return() {
             break;
         }
         // If buffer slot is still empty, we have processed all packets the device has filled
-        hw_ring_get_head(head, hw_ring_rx)
+        hw_ring_get_head(hw_head, hw_ring_rx)
         // volatile struct descriptor *d = &(hw_ring_rx->descr[hw_ring_rx->head]);
         hw_ring_get_descr(descr, hw_ring_rx)
-        var dscr_addr = descr + head * DESCRIPTROR_SIZE; // this is an shared mem address
+        var dscr_addr = descr + hw_head * DESCRIPTOR_SIZE; // this is an shared mem address
         var descriptor = 0;
         !ld32 descriptor, dscr_addr;
 
@@ -168,17 +168,15 @@ fun rx_return() {
             break;
         }
 
-        hw_ring_get_descr_mdata(buffer_addr, head, hw_ring_rx)
-        var len = descriptor & MASK_16;
-        st buffer_addr + @biw, len;
+        hw_ring_get_descr_mdata(buff, hw_head, hw_ring_rx)
+        st buff + @biw, descriptor & MASK_16;
 
-        var buffer = lds {1,1} buffer_addr;
-        var 1 err = net_enqueue(rx_active, size, buffer);
-
-        packets_transferred = true;
-        var new_head = head + 1;
-        pnk_modulo(mod, new_head, RX_COUNT)
+        pnk_modulo(mod, hw_head + 1, RX_COUNT)
         hw_ring_set_head(mod, hw_ring_rx)
+
+        var buffer = lds {1,1} buff;
+        var 1 err = net_enqueue(rx_active, size, buffer);
+        packets_transferred = true;
     }
 
     net_require_signal(signal, rx_active)
@@ -222,7 +220,6 @@ fun rx_provide() {
             if ((hw_tail + 1) == RX_COUNT) {
                 stat = (stat | WRAP) & MASK_16;
             }
-
             var buffer = lds {1,1} buffer_addr;
             hw_ring_get_descr_mdata(hw_buff_addr, hw_tail, hw_ring_rx)
             !stw hw_buff_addr, buffer.0;
@@ -231,8 +228,7 @@ fun rx_provide() {
             var io_or_offset = buffer.0;
             update_ring_slot(hw_ring_rx, hw_tail, io_or_offset, 0, stat)
 
-            hw_tail = hw_tail + 1;
-            pnk_modulo(mod, hw_tail, RX_COUNT)
+            pnk_modulo(mod, hw_tail + 1, RX_COUNT)
             hw_ring_set_tail(mod, hw_ring_rx)
 
             set_eth_rdar(RDAR_RDAR, eth)
@@ -291,17 +287,15 @@ fun tx_provide() {
             if ((hw_tail + 1) == TX_COUNT) {
                 stat = (stat | WRAP) & MASK_16;
             }
-            hw_ring_get_descr_mdata(buff, hw_tail, hw_ring_tx)
             var buffer = lds {1,1} buffer_addr;
-            !stw buff, buffer.0;
-            !stw buff + @biw, buffer.1;
+            hw_ring_get_descr_mdata(hw_buff_addr, hw_tail, hw_ring_tx)
+            !stw hw_buff_addr, buffer.0;
+            !stw hw_buff_addr + @biw, buffer.1;
 
             var io_or_offset = buffer.0;
-            var len = buffer.1;
-            update_ring_slot(hw_ring_tx, hw_tail, io_or_offset, len, stat)
+            update_ring_slot(hw_ring_tx, hw_tail, io_or_offset, buffer.1, stat)
 
-            hw_tail = hw_tail + 1;
-            pnk_modulo(mod, hw_tail, TX_COUNT)
+            pnk_modulo(mod, hw_tail + 1, TX_COUNT)
             hw_ring_set_tail(mod, hw_ring_tx)
 
             set_eth_tdar(TDAR_TDAR, eth)
@@ -329,21 +323,20 @@ fun tx_provide() {
  */
 fun tx_return() {
     var enqueued = false;
-    get_tx_queue(tx_queue)
     get_hw_ring_tx(hw_ring_tx)
-    get_size(size, tx_queue)
+    get_tx_queue(tx_queue)
     get_free_queue(tx_free, tx_queue)
+    get_size(size, tx_queue)
 
     while (true) {
         hw_ring_empty(empty, hw_ring_tx, TX_COUNT)
         if (empty) {
             break;
         }
-
         // Ensure that this buffer has been sent by the device
         hw_ring_get_head(hw_head, hw_ring_tx)
         hw_ring_get_descr(descr, hw_ring_tx)
-        var dscr_addr = descr + hw_head * DESCRIPTROR_SIZE;
+        var dscr_addr = descr + hw_head * DESCRIPTOR_SIZE;
         var descriptor = 0;
         !ld32 descriptor, dscr_addr;
 
@@ -355,15 +348,13 @@ fun tx_return() {
         hw_ring_get_descr_mdata(buff, hw_head, hw_ring_tx)
         st buff + @biw, 0;
 
-        var new_head = hw_head + 1;
-        pnk_modulo(mod, new_head, TX_COUNT)
+        pnk_modulo(mod, hw_head + 1, TX_COUNT);
         hw_ring_set_head(mod, hw_ring_tx)
 
         var buffer = lds {1,1} buff;
         var 1 err = net_enqueue(tx_free, size, buffer);
         enqueued = true;
     }
-
 
     net_require_signal(signal, tx_free)
     if (enqueued && signal) {
