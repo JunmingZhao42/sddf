@@ -171,8 +171,7 @@ fun rx_return() {
         hw_ring_get_descr_mdata(buff, hw_head, hw_ring_rx)
         st buff + @biw, descriptor & MASK_16;
 
-        pnk_modulo(mod, hw_head + 1, RX_COUNT)
-        hw_ring_set_head(mod, hw_ring_rx)
+        hw_ring_set_head(hw_head + 1, hw_ring_rx)
 
         var buffer = lds {1,1} buff;
         var 1 err = net_enqueue(rx_active, size, buffer);
@@ -226,10 +225,10 @@ fun rx_provide() {
             !stw hw_buff_addr + @biw, buffer.1;
 
             var io_or_offset = buffer.0;
-            update_ring_slot(hw_ring_rx, hw_tail, io_or_offset, 0, stat)
+            pnk_modulo(mod, hw_tail, RX_COUNT)
+            update_ring_slot(hw_ring_rx, mod, io_or_offset, 0, stat)
 
-            pnk_modulo(mod, hw_tail + 1, RX_COUNT)
-            hw_ring_set_tail(mod, hw_ring_rx)
+            hw_ring_set_tail(hw_tail + 1, hw_ring_rx)
 
             set_eth_rdar(RDAR_RDAR, eth)
         }
@@ -293,10 +292,10 @@ fun tx_provide() {
             !stw hw_buff_addr + @biw, buffer.1;
 
             var io_or_offset = buffer.0;
-            update_ring_slot(hw_ring_tx, hw_tail, io_or_offset, buffer.1, stat)
+            pnk_modulo(mod, hw_tail, TX_COUNT)
+            update_ring_slot(hw_ring_tx, mod, io_or_offset, buffer.1, stat)
 
-            pnk_modulo(mod, hw_tail + 1, TX_COUNT)
-            hw_ring_set_tail(mod, hw_ring_tx)
+            hw_ring_set_tail(hw_tail + 1, hw_ring_tx)
 
             set_eth_tdar(TDAR_TDAR, eth)
         }
@@ -348,8 +347,7 @@ fun tx_return() {
         hw_ring_get_descr_mdata(buff, hw_head, hw_ring_tx)
         st buff + @biw, 0;
 
-        pnk_modulo(mod, hw_head + 1, TX_COUNT);
-        hw_ring_set_head(mod, hw_ring_tx)
+        hw_ring_set_head(hw_head + 1, hw_ring_tx)
 
         var buffer = lds {1,1} buff;
         var 1 err = net_enqueue(tx_free, size, buffer);
