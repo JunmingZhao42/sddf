@@ -32,7 +32,7 @@
 #define net_queue_full(full, queue, size)   \
     get_tail(tail, queue)                   \
     get_head(head, queue)                   \
-    var full = (tail + 1 - head) == size;   \
+    var full = (tail - head) == size;   \
 
 /**
  * Enqueue an element into a queue.
