@@ -94,7 +94,7 @@ typedef struct {
 #define hw_ring_full(result, hw_ring, ring_size)    \
     hw_ring_get_tail(tail, hw_ring)                 \
     hw_ring_get_head(head, hw_ring)                 \
-    var value = tail - head + 1;                    \
+    var value = tail - head;                        \
     pnk_modulo(mod, value, ring_size)               \
     var result = (mod == 0);                        \
 
