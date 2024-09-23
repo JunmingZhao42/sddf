@@ -6,6 +6,7 @@
 #define BIT(nr) (1 << nr)
 #define MASK_16         65535
 #define BYTE_MASK       255
+#define HALF_BIW        (@biw >> 1)
 
 // Returns a % b, asuming b = x^n for some x and n
 #define pnk_modulo(result, a, b)        \
@@ -17,6 +18,9 @@
 
 #define THREAD_MEMORY_RELEASE()         \
     @THREAD_MEMORY_RELEASE(0,0,0,0);    \
+
+#define THREAD_MEMORY_ACQUIRE()         \
+    @THREAD_MEMORY_ACQUIRE(0,0,0,0);    \
 
 #define assert(assert_val)              \
     @assert(0,assert_val,0,0);          \

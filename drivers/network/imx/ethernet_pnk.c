@@ -45,6 +45,7 @@ struct descriptor {
 typedef struct {
     uint64_t tail; /* index to insert at */
     uint64_t head; /* index to remove from */
+    uint64_t capacity; /* capacity of the queues */
     net_buff_desc_t descr_mdata[MAX_COUNT]; /* associated meta data array */
     volatile struct descriptor *descr; /* buffer descripter array */
 } hw_ring_t;
@@ -93,7 +94,7 @@ void init_pancake_mem() {
 
 void init_pancake_data() {
     uintptr_t *heap = (uintptr_t *)cml_heap;
-    heap[0] = (uintptr_t *) eth;
+    heap[0] = (uintptr_t) eth;
     rx_queue = (net_queue_handle_t *) &heap[3];
     tx_queue = (net_queue_handle_t *) &heap[6];
     hw_ring_rx = (hw_ring_t *) &heap[9];
@@ -107,7 +108,9 @@ static void eth_setup(void)
     uint32_t h = eth->paur;
 
     /* Set up HW rings */
+    hw_ring_rx->capacity = RX_COUNT;
     hw_ring_rx->descr = (volatile struct descriptor *) hw_ring_buffer_vaddr;
+    hw_ring_tx->capacity = TX_COUNT;
     hw_ring_tx->descr = (volatile struct descriptor *)(hw_ring_buffer_vaddr + (sizeof(struct descriptor) * RX_COUNT));
 
     /* Perform reset */
@@ -151,14 +154,13 @@ static void eth_setup(void)
     eth->tipg = TIPG;
     /* Transmit FIFO Watermark register - store and forward */
     eth->tfwr = STRFWD;
-    /* clear rx store and forward. This must be done for hardware csums*/
+    /* clear rx store and forward. This must be done for hardware csums */
     eth->rsfl = 0;
     /* Do not forward frames with errors + check the csum */
     eth->racc = RACC_LINEDIS | RACC_IPDIS | RACC_PRODIS;
     /* Add the checksum for known IP protocols */
     eth->tacc = TACC_PROCHK | TACC_IPCHK;
 
-    /* Set RDSR */
     eth->rdsr = hw_ring_buffer_paddr;
     eth->tdsr = hw_ring_buffer_paddr + (sizeof(struct descriptor) * RX_COUNT);
 
@@ -187,8 +189,8 @@ void init(void)
     init_pancake_data();
     eth_setup();
 
-    net_queue_init(rx_queue, rx_free, rx_active, NET_RX_QUEUE_SIZE_DRIV);
-    net_queue_init(tx_queue, tx_free, tx_active, NET_TX_QUEUE_SIZE_DRIV);
+    net_queue_init(rx_queue, rx_free, rx_active, NET_RX_QUEUE_CAPACITY_DRIV);
+    net_queue_init(tx_queue, tx_free, tx_active, NET_TX_QUEUE_CAPACITY_DRIV);
 
     cml_main();
 }

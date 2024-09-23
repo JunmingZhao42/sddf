@@ -1,16 +1,4 @@
 /**
- * Get the number of buffers enqueued into a queue.
- *
- * @param queue queue handle for the queue to get the size of.
- *
- * @return number of buffers enqueued into a queue.
- */
-#define net_queue_size(size, queue) \
-    get_tail(tail, queue)           \
-    get_head(head, queue)           \
-    var size = (tail - head);       \
-
-/**
  * Check if the network queue queue is empty.
  *
  * @param queue queue to check.
@@ -29,34 +17,35 @@
  *
  * @return true indicates the queue is full, false otherwise.
  */
-#define net_queue_full(full, queue, size)   \
+#define net_queue_full(full, queue, length) \
     get_tail(tail, queue)                   \
     get_head(head, queue)                   \
-    var full = (tail + 1 - head) == size;   \
+    var full = (tail - head) == length;     \
 
 /**
  * Enqueue an element into a queue.
  *
  * @param queue queue to enqueue into.
- * @param size size of the queue.
+ * @param capacity capacity of the queue.
  * @param buffer buffer descriptor for buffer to be enqueued.
  *
  * @return -1 when queue is full, 0 on success.
  */
-fun net_enqueue(1 queue, 1 size, 2 buffer) {
-    net_queue_full(full, queue, size)
+fun net_enqueue(1 queue, 1 capacity, 2 buffer) {
+    net_queue_full(full, queue, capacity)
     if (full) {
         return -1;
     }
 
     get_tail(tail, queue)
-    pnk_modulo(idx, tail, size)
+    pnk_modulo(idx, tail, capacity)
     get_buffer_desc_addr(buff, idx, queue)
 
     !stw buff, (buffer.0);
     !stw buff + @biw, (buffer.1);
 
 // TODO: #ifdef CONFIG_ENABLE_SMP_SUPPORT
+// Todo: remove this
     THREAD_MEMORY_RELEASE()
 
     tail = tail + 1;
@@ -68,19 +57,19 @@ fun net_enqueue(1 queue, 1 size, 2 buffer) {
  * Dequeue an element from the network queue.
  *
  * @param queue queue handle to dequeue from.
- * @param size size of the queue.
+ * @param capacity capacity of the queue.
  * @param buffer pointer to buffer descriptor for buffer to be dequeued.
  *
  * @return -1 when queue is empty, 0 on success.
  */
-fun net_dequeue(1 queue, 1 size, 1 buffer_addr) {
+fun net_dequeue(1 queue, 1 capacity, 1 buffer_addr) {
     net_queue_empty(empty, queue)
     if (empty) {
         return -1;
     }
 
     get_head(head, queue)
-    pnk_modulo(idx, head, size)
+    pnk_modulo(idx, head, capacity)
     get_buffer_desc_addr(buff, idx, queue)
 
     var buf_v = 0;

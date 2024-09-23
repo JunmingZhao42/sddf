@@ -7,18 +7,19 @@
      [9..31] | rx_queue {               |
              | free buffer ptr          +---->
              | active buffer ptr        +----> shared mem with virt_rx
-             | queue size               |
+             | queue capacity           |
              |}                         |
              +--------------------------+
     [32..55] | tx queue {               |
              | free buffer ptr          +---->
              | active buffer ptr        +----> shared mem with virt_tx
-             | queue size               |
+             | queue capacity           |
              |}                         |
              +--------------------------+
   [56..4175] | hw_ring tx {             |
              |  tail index              |
              |  head index              |
+             |  capacity                |
              |  buffers meta data       |
              |  buffer descriptors ptr  +----> shared mem with device
              | }                        |
@@ -26,6 +27,7 @@
 [4176..8295] | hw_ring rx {             |
              |  tail index              |
              |  head index              |
+             |  capacity                |
              |  buffers meta data       |
              |  buffer descriptors ptr  +----> shared mem with device
              | }                        |
@@ -43,10 +45,7 @@
 #define TX_CH  1
 #define RX_CH  2
 
-#define RX_COUNT 256
-#define TX_COUNT 256
 #define MAX_COUNT 256
-
 #define MAX_PACKET_SIZE     1536
 
 #define get_eth_regs(eth_regs)  \
@@ -70,7 +69,7 @@ typedef struct {
 } hw_ring_t;
 */
 
-#define HW_RING_SIZE (3 * @biw + MAX_COUNT * NET_BUFF_DESC_SIZE)
+#define HW_RING_SIZE (4 * @biw + MAX_COUNT * NET_BUFF_DESC_SIZE)
 
 #define hw_ring_get_tail(tail, hw_ring)     \
     var tail = lds 1 hw_ring;               \
@@ -84,26 +83,25 @@ typedef struct {
 #define hw_ring_set_head(head, hw_ring)     \
     st hw_ring + @biw, head;                \
 
-#define hw_ring_get_descr_mdata(desc, index, hw_ring)       \
-    var desc = hw_ring + 16 + index * NET_BUFF_DESC_SIZE;   \
+#define hw_ring_get_capacity(capacity, hw_ring) \
+    var capacity = lds 1 hw_ring + 2 * @biw;    \
 
 #define hw_ring_get_descr(descr, hw_ring)                               \
-    var addr = hw_ring + (2 * @biw) + MAX_COUNT * NET_BUFF_DESC_SIZE;   \
+    var addr = hw_ring + (3 * @biw) + MAX_COUNT * NET_BUFF_DESC_SIZE;   \
     var descr = lds 1 addr;                                             \
 
-#define hw_ring_full(result, hw_ring, ring_size)    \
-    hw_ring_get_tail(tail, hw_ring)                 \
-    hw_ring_get_head(head, hw_ring)                 \
-    var value = tail - head + 1;                    \
-    pnk_modulo(mod, value, ring_size)               \
-    var result = (mod == 0);                        \
+#define hw_ring_get_descr_mdata(desc, index, hw_ring)               \
+    var desc = hw_ring + (3 * @biw) + index * NET_BUFF_DESC_SIZE;   \
 
-#define hw_ring_empty(result, hw_ring, ring_size)   \
+#define hw_ring_full(result, hw_ring, ring_capacity)\
     hw_ring_get_tail(tail, hw_ring)                 \
     hw_ring_get_head(head, hw_ring)                 \
-    var value = tail - head;                        \
-    pnk_modulo(mod, value, ring_size)               \
-    var result = (mod == 0);                        \
+    var result = (tail - head) == ring_capacity;    \
+
+#define hw_ring_empty(result, hw_ring)              \
+    hw_ring_get_tail(tail, hw_ring)                 \
+    hw_ring_get_head(head, hw_ring)                 \
+    var result = (tail - head) == 0;                \
 
 /*
 // HW ring descriptor (shared with device)
@@ -148,18 +146,21 @@ fun rx_return() {
     get_hw_ring_rx(hw_ring_rx)
     get_rx_queue(rx_queue)
     get_active_queue(rx_active, rx_queue)
-    get_size(size, rx_queue)
+    get_capacity(capacity, rx_queue)
+    hw_ring_get_capacity(hw_capacity, hw_ring_rx)
 
     while (true) {
-        hw_ring_empty(empty, hw_ring_rx, RX_COUNT)
+        hw_ring_empty(empty, hw_ring_rx)
         if (empty) {
             break;
         }
         // If buffer slot is still empty, we have processed all packets the device has filled
-        hw_ring_get_head(head, hw_ring_rx)
+        hw_ring_get_head(hw_head, hw_ring_rx)
+        pnk_modulo(idx, hw_head, hw_capacity)
+
         // volatile struct descriptor *d = &(hw_ring_rx->descr[hw_ring_rx->head]);
         hw_ring_get_descr(descr, hw_ring_rx)
-        var dscr_addr = descr + head * DESCRIPTROR_SIZE; // this is an shared mem address
+        var dscr_addr = descr + idx * DESCRIPTROR_SIZE; // this is an shared mem address
         var descriptor = 0;
         !ld32 descriptor, dscr_addr;
 
@@ -168,17 +169,16 @@ fun rx_return() {
             break;
         }
 
-        hw_ring_get_descr_mdata(buffer_addr, head, hw_ring_rx)
+        hw_ring_get_descr_mdata(buffer_addr, idx, hw_ring_rx)
         var len = descriptor & MASK_16;
         st buffer_addr + @biw, len;
 
         var buffer = lds {1,1} buffer_addr;
-        var 1 err = net_enqueue(rx_active, size, buffer);
+        var 1 err = net_enqueue(rx_active, capacity, buffer);
 
         packets_transferred = true;
-        var new_head = head + 1;
-        pnk_modulo(mod, new_head, RX_COUNT)
-        hw_ring_set_head(mod, hw_ring_rx)
+        hw_head = hw_head + 1;
+        hw_ring_set_head(hw_head, hw_ring_rx)
     }
 
     net_require_signal(signal, rx_active)
@@ -202,44 +202,44 @@ fun rx_provide() {
     var reprocess = true;
     get_hw_ring_rx(hw_ring_rx)
     get_rx_queue(rx_queue)
-    get_size(size, rx_queue)
+    get_capacity(capacity, rx_queue)
     get_free_queue(rx_free, rx_queue)
     get_eth_regs(eth)
+    hw_ring_get_capacity(hw_capacity, hw_ring_rx)
 
     while (reprocess) {
         while (true) {
-            hw_ring_full(full, hw_ring_rx, RX_COUNT)
+            hw_ring_full(full, hw_ring_rx, hw_capacity)
             net_queue_empty(empty, rx_free)
             if (full || empty) {
                 break;
             }
 
             var buffer_addr = ETH_FUNC_BASE + 512;
-            var 1 err = net_dequeue(rx_free, size, buffer_addr);
+            var 1 err = net_dequeue(rx_free, capacity, buffer_addr);
 
             var stat = RXD_EMPTY; // uint16_t
             hw_ring_get_tail(hw_tail, hw_ring_rx)
-            if ((hw_tail + 1) == RX_COUNT) {
-                stat = (stat | WRAP) & MASK_16;
+            pnk_modulo(idx, hw_tail, hw_capacity)
+            if (idx + 1 == hw_capacity) {
+                stat = stat | WRAP;
             }
 
             var buffer = lds {1,1} buffer_addr;
-            hw_ring_get_descr_mdata(hw_buff_addr, hw_tail, hw_ring_rx)
+            hw_ring_get_descr_mdata(hw_buff_addr, idx, hw_ring_rx)
             !stw hw_buff_addr, buffer.0;
             !stw hw_buff_addr + @biw, buffer.1;
 
             var io_or_offset = buffer.0;
-            update_ring_slot(hw_ring_rx, hw_tail, io_or_offset, 0, stat)
+            update_ring_slot(hw_ring_rx, idx, io_or_offset, 0, stat)
 
             hw_tail = hw_tail + 1;
-            pnk_modulo(mod, hw_tail, RX_COUNT)
-            hw_ring_set_tail(mod, hw_ring_rx)
-
+            hw_ring_set_tail(hw_tail, hw_ring_rx)
             set_eth_rdar(RDAR_RDAR, eth)
         }
 
         // Only request a notification from virtualiser if HW ring not full
-        hw_ring_full(full, hw_ring_rx, RX_COUNT)
+        hw_ring_full(full, hw_ring_rx, hw_capacity)
         if (!full) {
             net_request_signal(rx_free)
         } else {
@@ -249,7 +249,7 @@ fun rx_provide() {
         reprocess = false;
 
         net_queue_empty(empty, rx_free)
-        hw_ring_full(full, hw_ring_rx, RX_COUNT)
+        hw_ring_full(full, hw_ring_rx, hw_capacity)
         if ((!empty) && (!full)) {
             net_cancel_signal(rx_free)
             reprocess = true;
@@ -271,38 +271,39 @@ fun tx_provide() {
     var reprocess = true;
     get_hw_ring_tx(hw_ring_tx)
     get_tx_queue(tx_queue)
-    get_size(size, tx_queue)
+    get_capacity(capacity, tx_queue)
     get_active_queue(tx_active, tx_queue)
     get_eth_regs(eth)
+    hw_ring_get_capacity(hw_capacity, hw_ring_tx)
 
     while (reprocess) {
         while (true) {
-            hw_ring_full(full, hw_ring_tx, TX_COUNT)
+            hw_ring_full(full, hw_ring_tx, hw_capacity)
             net_queue_empty(empty, tx_active)
             if (full || empty) {
                 break;
             }
 
             var buffer_addr = ETH_FUNC_BASE + 512;
-            var 1 err = net_dequeue(tx_active, size, buffer_addr);
+            var 1 err = net_dequeue(tx_active, capacity, buffer_addr);
 
             var stat = TXD_READY | TXD_ADDCRC | TXD_LAST; // uint16_t
             hw_ring_get_tail(hw_tail, hw_ring_tx)
-            if ((hw_tail + 1) == TX_COUNT) {
-                stat = (stat | WRAP) & MASK_16;
+            pnk_modulo(idx, hw_tail, hw_capacity)
+            if (idx + 1 == hw_capacity) {
+                stat = stat | WRAP;
             }
-            hw_ring_get_descr_mdata(buff, hw_tail, hw_ring_tx)
+            hw_ring_get_descr_mdata(buff, idx, hw_ring_tx)
             var buffer = lds {1,1} buffer_addr;
             !stw buff, buffer.0;
             !stw buff + @biw, buffer.1;
 
             var io_or_offset = buffer.0;
             var len = buffer.1;
-            update_ring_slot(hw_ring_tx, hw_tail, io_or_offset, len, stat)
+            update_ring_slot(hw_ring_tx, idx, io_or_offset, len, stat)
 
             hw_tail = hw_tail + 1;
-            pnk_modulo(mod, hw_tail, TX_COUNT)
-            hw_ring_set_tail(mod, hw_ring_tx)
+            hw_ring_set_tail(hw_tail, hw_ring_tx)
 
             set_eth_tdar(TDAR_TDAR, eth)
         }
@@ -310,7 +311,7 @@ fun tx_provide() {
         net_request_signal(tx_active)
         reprocess = false;
 
-        hw_ring_full(full, hw_ring_tx, TX_COUNT)
+        hw_ring_full(full, hw_ring_tx, hw_capacity)
         net_queue_empty(empty, tx_active)
         if ((!full) && (!empty)) {
             net_cancel_signal(tx_active)
@@ -331,19 +332,21 @@ fun tx_return() {
     var enqueued = false;
     get_tx_queue(tx_queue)
     get_hw_ring_tx(hw_ring_tx)
-    get_size(size, tx_queue)
+    get_capacity(capacity, tx_queue)
     get_free_queue(tx_free, tx_queue)
+    hw_ring_get_capacity(hw_capacity, hw_ring_tx)
 
     while (true) {
-        hw_ring_empty(empty, hw_ring_tx, TX_COUNT)
+        hw_ring_empty(empty, hw_ring_tx)
         if (empty) {
             break;
         }
 
         // Ensure that this buffer has been sent by the device
         hw_ring_get_head(hw_head, hw_ring_tx)
+        pnk_modulo(idx, hw_head, hw_capacity)
         hw_ring_get_descr(descr, hw_ring_tx)
-        var dscr_addr = descr + hw_head * DESCRIPTROR_SIZE;
+        var dscr_addr = descr + idx * DESCRIPTROR_SIZE;
         var descriptor = 0;
         !ld32 descriptor, dscr_addr;
 
@@ -352,16 +355,15 @@ fun tx_return() {
             break;
         }
 
-        hw_ring_get_descr_mdata(buff, hw_head, hw_ring_tx)
+        hw_ring_get_descr_mdata(buff, idx, hw_ring_tx)
         st buff + @biw, 0;
 
-        var new_head = hw_head + 1;
-        pnk_modulo(mod, new_head, TX_COUNT)
-        hw_ring_set_head(mod, hw_ring_tx)
-
         var buffer = lds {1,1} buff;
-        var 1 err = net_enqueue(tx_free, size, buffer);
+        var 1 err = net_enqueue(tx_free, capacity, buffer);
+
         enqueued = true;
+        hw_head = hw_head + 1;
+        hw_ring_set_head(hw_head, hw_ring_tx)
     }
 
 
@@ -383,15 +385,16 @@ fun handle_irq() {
     while (e & IRQ_MASK) {
         if (e & NETIRQ_TXF) {
             tx_return();
+            tx_provide();
         }
         if (e & NETIRQ_RXF) {
             rx_return();
             rx_provide();
         }
-        if (e & NETIRQ_EBERR) {
-            skip;
-            // TODO: sddf_dprintf("ETH|ERROR: System bus/uDMA\n");
-        }
+        // TODO: sddf_dprintf("ETH|ERROR: System bus/uDMA\n");
+        // if (e & NETIRQ_EBERR) {
+        //    skip;
+        // }
         get_eth_eir(eir, eth)
         e = eir & IRQ_MASK;
         set_eth_eir(e, eth)

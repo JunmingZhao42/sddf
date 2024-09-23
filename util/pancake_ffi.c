@@ -95,6 +95,10 @@ void ffiTHREAD_MEMORY_RELEASE(unsigned char *c, long clen, unsigned char *a, lon
     THREAD_MEMORY_RELEASE();
 }
 
+void ffiTHREAD_MEMORY_ACQUIRE(unsigned char *c, long clen, unsigned char *a, long alen) {
+    THREAD_MEMORY_ACQUIRE();
+}
+
 void ffiassert(unsigned char *c, long clen, unsigned char *a, long alen) {
     // clen is the condition
     assert(clen);

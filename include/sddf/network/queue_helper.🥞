@@ -8,18 +8,6 @@ typedef struct net_buff_desc {
 */
 #define NET_BUFF_DESC_SIZE  (2 * @biw)
 
-#define get_io_or_offset(io_or_offset, desc)    \
-    var io_or_offset = lds 1 desc;              \
-
-#define set_io_or_offset(io_or_offset, desc)    \
-    st desc, io_or_offset;                      \
-
-#define get_len(len, desc)                      \
-    var len = lds 1 desc + @biw;                \
-
-#define set_len(len, desc)                      \
-    st desc + @biw, len;                        \
-
 /*
 typedef struct net_queue {
     // index to insert at
@@ -70,8 +58,8 @@ typedef struct net_queue_handle {
     net_queue_t *free;
     // filled buffers
     net_queue_t *active;
-    // size of the queues
-    uint64_t size;
+    // capacity of the queues
+    uint32_t capacity;
 } net_queue_handle_t;
 */
 #define NET_QUEUE_HANDLE_SIZE  (3 * @biw)
@@ -79,50 +67,9 @@ typedef struct net_queue_handle {
 #define get_free_queue(free, queue_handle)  \
     var free = lds 1 queue_handle;          \
 
-#define set_free_queue(free, queue_handle)  \
-    st queue_handle, free;                  \
-
 #define get_active_queue(active, queue_handle)  \
     var active = lds 1 queue_handle + @biw;     \
 
-#define set_active_queue(active, queue_handle)  \
-    st queue_handle + @biw, active;             \
-
-#define get_size(size, queue_handle)            \
-    var size = lds 1 queue_handle + 2 * @biw;   \
-
-#define set_size(size, queue_handle)        \
-    st queue_handle + 2 * @biw, size;       \
-
-#define get_free_head(head, queue_handle)   \
-    get_free_queue(queue, queue_handle)     \
-    get_head(head, queue)
-
-#define set_free_head(head, queue_handle)   \
-    get_free_queue(queue, queue_handle)     \
-    set_head(head, queue)
-
-#define get_free_tail(tail, queue_handle)   \
-    get_free_queue(queue, queue_handle)     \
-    get_tail(tail, queue)
-
-#define set_free_tail(tail, queue_handle)   \
-    get_free_queue(queue, queue_handle)     \
-    set_tail(tail, queue)
-
-#define get_active_head(head, queue_handle) \
-    get_active_queue(queue, queue_handle)   \
-    get_head(head, queue)
-
-#define set_active_head(head, queue_handle) \
-    get_active_queue(queue, queue_handle)   \
-    set_head(head, queue)
-
-#define get_active_tail(tail, queue_handle) \
-    get_active_queue(queue, queue_handle)   \
-    get_tail(tail, queue)
-
-#define set_active_tail(tail, queue_handle) \
-    get_active_queue(queue, queue_handle)   \
-    set_tail(tail, queue)
-
+#define get_capacity(capacity, queue_handle)    \
+    var capacity = 0;                           \
+    !ld32 capacity, queue_handle + 2 * @biw;    \
