@@ -46,7 +46,6 @@ typedef struct {
     uint64_t tail; /* index to insert at */
     uint64_t head; /* index to remove from */
     uint64_t capacity; /* capacity of the queues */
-    net_buff_desc_t descr_mdata[MAX_COUNT]; /* associated meta data array */
     volatile struct descriptor *descr; /* buffer descripter array */
 } hw_ring_t;
 
@@ -60,7 +59,7 @@ net_queue_handle_t *tx_queue;
 
 volatile struct enet_regs *eth;
 
-static char cml_memory[1024*10];
+static char cml_memory[1024*17];
 extern void *cml_heap;
 extern void *cml_stack;
 extern void *cml_stackend;
@@ -85,7 +84,7 @@ void cml_clear() {
 }
 
 void init_pancake_mem() {
-    unsigned long cml_heap_sz = 1024*9;
+    unsigned long cml_heap_sz = 1024*16;
     unsigned long cml_stack_sz = 1024;
     cml_heap = cml_memory;
     cml_stack = cml_heap + cml_heap_sz;

@@ -10,6 +10,8 @@
     get_head(head, queue)               \
     var empty = (tail - head) == 0;     \
 
+#define queue_empty(head, tail)     (head == tail)
+
 /**
  * Check if the network queue is full.
  *
@@ -22,6 +24,8 @@
     get_head(head, queue)                   \
     var full = (tail - head) == length;     \
 
+#define queue_full(head, tail, length)  ((tail - head) == length)
+
 /**
  * Enqueue an element into a queue.
  *
@@ -31,7 +35,7 @@
  *
  * @return -1 when queue is full, 0 on success.
  */
-fun net_enqueue(1 queue, 1 capacity, 2 buffer) {
+fun net_enqueue(1 queue, 1 capacity, 1 buffer_addr) {
     net_queue_full(full, queue, capacity)
     if (full) {
         return -1;
@@ -41,6 +45,7 @@ fun net_enqueue(1 queue, 1 capacity, 2 buffer) {
     pnk_modulo(idx, tail, capacity)
     get_buffer_desc_addr(buff, idx, queue)
 
+    var buffer = lds {1,1} buffer_addr;
     !stw buff, (buffer.0);
     !stw buff + @biw, (buffer.1);
 

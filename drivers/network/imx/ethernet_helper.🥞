@@ -154,8 +154,6 @@ struct enet_regs {
 };
 */
 
-#define ETH_FUNC_BASE                   @base + 8360
-
 #define EIR_OFFSET                      4
 #define EIMR_OFFSET                     8
 #define RDAR_OFFSET                     16

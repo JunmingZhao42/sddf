@@ -1,4 +1,11 @@
 /*
+ * Helper functions/macros for pancake to access 
+ * the shared memory and network queues and buffers
+ * 
+ * Can't use shape/struct at the moment since it's in shared memory
+*/
+
+/*
 typedef struct net_buff_desc {
     // offset of buffer within buffer memory region or io address of buffer
     uint64_t io_or_offset;
@@ -47,29 +54,8 @@ typedef struct net_queue {
 
 #define set_consumer_signalled(queue)   \
     var signal = 1;                     \
-    st8 queue + 2 * @biw, signal;       \
+    !st8 queue + 2 * @biw, signal;      \
 
 #define get_buffer_desc_addr(desc, index, queue)                \
     var desc = queue + 3 * @biw + index * NET_BUFF_DESC_SIZE;   \
 
-/*
-typedef struct net_queue_handle {
-    // available buffers
-    net_queue_t *free;
-    // filled buffers
-    net_queue_t *active;
-    // capacity of the queues
-    uint32_t capacity;
-} net_queue_handle_t;
-*/
-#define NET_QUEUE_HANDLE_SIZE  (3 * @biw)
-
-#define get_free_queue(free, queue_handle)  \
-    var free = lds 1 queue_handle;          \
-
-#define get_active_queue(active, queue_handle)  \
-    var active = lds 1 queue_handle + @biw;     \
-
-#define get_capacity(capacity, queue_handle)    \
-    var capacity = 0;                           \
-    !ld32 capacity, queue_handle + 2 * @biw;    \

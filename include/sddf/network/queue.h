@@ -40,7 +40,7 @@ typedef struct net_queue_handle {
     /* filled buffers */
     net_queue_t *active;
     /* capacity of the queues */
-    uint32_t capacity;
+    uint64_t capacity;
 } net_queue_handle_t;
 
 /**
@@ -203,7 +203,7 @@ static inline int net_dequeue_active(net_queue_handle_t *queue, net_buff_desc_t 
  * @param active pointer to active queue in shared memory.
  * @param capacity capacity of the free and active queues.
  */
-static inline void net_queue_init(net_queue_handle_t *queue, net_queue_t *free, net_queue_t *active, uint32_t capacity)
+static inline void net_queue_init(net_queue_handle_t *queue, net_queue_t *free, net_queue_t *active, uint64_t capacity)
 {
     queue->free = free;
     queue->active = active;
@@ -218,7 +218,7 @@ static inline void net_queue_init(net_queue_handle_t *queue, net_queue_t *free, 
  */
 static inline void net_buffers_init(net_queue_handle_t *queue, uintptr_t base_addr)
 {
-    for (uint32_t i = 0; i < queue->capacity; i++) {
+    for (uint64_t i = 0; i < queue->capacity; i++) {
         net_buff_desc_t buffer = {(NET_BUFFER_SIZE * i) + base_addr, 0};
         int err = net_enqueue_free(queue, buffer);
         assert(!err);
