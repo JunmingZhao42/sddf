@@ -1,48 +1,45 @@
-/* pancake heap                                
-                                                      
-        word                                                             
-              ┌──────────────────────────┐                               
-           0  │ eth regs addr            │                               
-              ├──────────────────────────┤                               
-              │ rx_queue {               │                               
-           1  │ free buffer ptr    ──────┼────►                          
-           2  │ active buffer ptr  ──────┼────► shared mem with virt_rx  
-           3  │ queue capacity           │                               
-              │}                         │                               
-              ├──────────────────────────┤                               
-              │ tx queue {               │                               
-           4  │ free buffer ptr    ──────┼────►                          
-           5  │ active buffer ptr  ──────┼────► shared mem with virt_tx  
-           6  │ queue capacity           │                               
-              │}                         │                               
-              ├──────────────────────────┤                               
-              │ hw_ring tx {             │                               
-           7  │  tail index              │                               
-           8  │  head index              │                               
-           9  │  capacity                │                               
-          10  │  buffer descriptors ptr ─┼────► shared mem with device   
-              │ }                        │                               
-              ├──────────────────────────┤                               
-              │ hw_ring rx {             │                               
-          11  │  tail index              │                               
-          12  │  head index              │                               
-          13  │  capacity                │                               
-          14  │  buffer descriptors ptr ─┼────► shared mem with device   
-              │ }                        │                               
-              ├──────────────────────────┤                               
-     15..527  │ rx meta data             │                               
-              ├──────────────────────────┤                               
-   527..1039  │ tx meta data             │                               
-              ├──────────────────────────┤                                                        
-*/                                                                                                                                             
+/* pancake heap
+
+        word
+              ┌──────────────────────────┐
+           0  │ eth regs addr            │
+              ├──────────────────────────┤
+              │ rx_queue {               │
+           1  │ free buffer ptr    ──────┼────►
+           2  │ active buffer ptr  ──────┼────► shared mem with virt_rx
+           3  │ queue capacity           │
+              │}                         │
+              ├──────────────────────────┤
+              │ tx queue {               │
+           4  │ free buffer ptr    ──────┼────►
+           5  │ active buffer ptr  ──────┼────► shared mem with virt_tx
+           6  │ queue capacity           │
+              │}                         │
+              ├──────────────────────────┤
+              │ hw_ring tx {             │
+           7  │  tail index              │
+           8  │  head index              │
+           9  │  capacity                │
+          10  │  buffer descriptors ptr ─┼────► shared mem with device
+              │ }                        │
+              ├──────────────────────────┤
+              │ hw_ring rx {             │
+          11  │  tail index              │
+          12  │  head index              │
+          13  │  capacity                │
+          14  │  buffer descriptors ptr ─┼────► shared mem with device
+              │ }                        │
+              ├──────────────────────────┤
+     15..527  │ rx meta data             │
+              ├──────────────────────────┤
+   527..1039  │ tx meta data             │
+              ├──────────────────────────┤
+*/
 
 #define IRQ_CH 0
 #define TX_CH  1
 #define RX_CH  2
 
-#define MAX_COUNT       256
-
-#define ETH_REGS        (lds 1 @base)
 #define RX_QUEUE_ADDR   (@base + 1 * @biw)
 #define TX_QUEUE_ADDR   (@base + 4 * @biw)
 #define RX_MDATA_ADDR   (@base + 15 * @biw)
@@ -51,21 +48,24 @@
 #define RX_MDATA_ADDR_IDX(idx)  (RX_MDATA_ADDR + idx * NET_BUFF_DESC_SIZE)
 #define TX_MDATA_ADDR_IDX(idx)  (TX_MDATA_ADDR + idx * NET_BUFF_DESC_SIZE)
 
-#define DESCRIPTROR_SIZE        8
-#define DESCRP_ADDR_IDX(idx)    (descr + idx * DESCRIPTROR_SIZE)
+#define HW_RING_SIZE    (4 * @biw)
+#define HW_RING_RX      (@base + 7 * @biw)
+#define HW_RING_TX      (@base + 7 * @biw + HW_RING_SIZE)
+#define HW_DESCR_RX     (lds 1 (@base + 10 * @biw))
+#define HW_DESCR_TX     (lds 1 (@base + 14 * @biw))
 
-#define HW_RING_SIZE        (4 * @biw)
-#define HW_RING_RX          (@base + 7 * @biw)
-#define HW_RING_TX          (@base + 7 * @biw + HW_RING_SIZE)
+fun hw_queue_empty({1,1,1} ring) {
+    var tail = ring.0;
+    var head = ring.1;
+    return head == tail;
+}
 
-// Todo: change this hack once !st16/!ld16 is supported in pancake
-// Todo: call driver functions (empty) after accessing driver registers
-#define update_ring_slot(descr, idx, phys, len, stat)       \
-    var dst_addr = DESCRP_ADDR_IDX(idx);                    \
-    var descriptor = (stat << 16) | len;                    \
-    !st32 dst_addr + 4, phys;                               \
-    THREAD_MEMORY_RELEASE()                                 \
-    !st32 dst_addr, descriptor;                             \
+fun hw_queue_full({1,1,1} ring) {
+    var tail = ring.0;
+    var head = ring.1;
+    var length = ring.2;
+    return  ((tail - head) == length);
+}
 
 fun main () {
     rx_provide();
@@ -87,39 +87,39 @@ fun rx_return() {
     var capacity = rx_queue.2;
 
     while (true) {
-        var hw_ring_rx = lds {1,1,1,1} HW_RING_RX;
-        var hw_tail = hw_ring_rx.0;
-        var hw_head = hw_ring_rx.1;
-        if (queue_empty(hw_head, hw_tail)) {
+        var hw_ring_rx = lds {1,1,1} HW_RING_RX;
+        var 1 empty = hw_queue_empty(hw_ring_rx);
+        if (empty) {
             break;
         }
         // If buffer slot is still empty, we have processed all packets the device has filled
+        var hw_head = hw_ring_rx.1;
         var hw_capacity = hw_ring_rx.2;
-        pnk_modulo(idx, hw_head, hw_capacity)
+        var 1 idx = pnk_modulo(hw_head, hw_capacity);
 
         // volatile struct descriptor *d = &(hw_ring_rx->descr[hw_ring_rx->head]);
-        var descr = hw_ring_rx.3;
-        var dscr_addr = DESCRP_ADDR_IDX(idx); // this is an shared mem address
+        var dscr_addr = DESCRP_ADDR_IDX(HW_DESCR_RX, idx);
         var descriptor = 0;
         !ld32 descriptor, dscr_addr;
-
-        var stat = (descriptor >> 16) & MASK_16;
-        if (stat & RXD_EMPTY) {
+        var 1 not_received = rx_descriptor_empty(descriptor);
+        if (not_received) {
             break;
         }
 
         var mdata_buff = RX_MDATA_ADDR_IDX(idx);
-        st mdata_buff + @biw, (descriptor & MASK_16);
+        var 1 len = descriptor_get_len(descriptor);
+        st mdata_buff + @biw, len;
         var 1 err = net_enqueue(rx_active, capacity, mdata_buff);
 
         packets_transferred = true;
         hw_head = hw_head + 1;
-        st HW_RING_RX, <hw_tail, hw_head, hw_capacity, descr>;
+        var hw_tail = hw_ring_rx.0;
+        st HW_RING_RX, <hw_tail, hw_head>;
     }
 
-    net_require_signal(signal, rx_active)
+    var 1 signal = net_require_signal(rx_active);
     if (packets_transferred && signal) {
-        net_cancel_signal(rx_active)
+        net_cancel_signal(rx_active);
         microkit_notify(RX_CH)
     }
     return 0;
@@ -143,52 +143,43 @@ fun rx_provide() {
 
     while (reprocess) {
         while (true) {
-            var hw_ring_rx = lds {1,1,1,1} HW_RING_RX;
-            var hw_tail = hw_ring_rx.0;
-            var hw_head = hw_ring_rx.1;
-            var hw_capacity = hw_ring_rx.2;
-            net_queue_empty(empty, rx_free)
-            if (queue_full(hw_head, hw_tail, hw_capacity) || empty) {
+            var hw_ring_rx = lds {1,1,1} HW_RING_RX;
+            var 1 empty = net_queue_empty(rx_free);
+            var 1 full = hw_queue_full(hw_ring_rx);
+            if (full || empty) {
                 break;
             }
-            THREAD_MEMORY_ACQUIRE()
 
             var {1,1} net_buffer = net_dequeue(rx_free, capacity);
 
-            var stat = RXD_EMPTY; // uint16_t
-            pnk_modulo(idx, hw_tail, hw_capacity)
-            if (idx + 1 == hw_capacity) {
-                stat = stat | WRAP;
-            }
+            var hw_tail = hw_ring_rx.0;
+            var hw_capacity = hw_ring_rx.2;
+            var 1 idx = pnk_modulo(hw_tail, hw_capacity);
 
             var mdata_buff = RX_MDATA_ADDR_IDX(idx);
-            var io_or_offset = net_buffer.0;
-            var len = net_buffer.1;
-            !stw mdata_buff, io_or_offset;
-            !stw mdata_buff + @biw, len;
-
-            var descr = hw_ring_rx.3;
-            update_ring_slot(descr, idx, io_or_offset, 0, stat)
+            st mdata_buff, net_buffer;
+            rx_update_device_ring_slot(HW_DESCR_RX, idx, net_buffer, hw_capacity);
 
             hw_tail = hw_tail + 1;
-            st HW_RING_RX, <hw_tail, hw_head, hw_capacity, descr>;
-            set_eth_rdar(RDAR_RDAR, eth)
+            var hw_head = hw_ring_rx.1;
+            st HW_RING_RX, <hw_tail, hw_head>;
+            set_device_RDAR();
         }
 
         // Only request a notification from virtualiser if HW ring not full
-        var hw_ring_rx = lds {1,1,1,1} HW_RING_RX;
-        var full = queue_full(hw_ring_rx.1, hw_ring_rx.0, hw_ring_rx.2);
+        var hw_ring_rx = lds {1,1,1} HW_RING_RX;
+        var 1 full = hw_queue_full(hw_ring_rx);
         if (!full) {
-            net_request_signal(rx_free)
+            net_request_signal(rx_free);
         } else {
-            net_cancel_signal(rx_free)
+            net_cancel_signal(rx_free);
         }
 
         reprocess = false;
 
-        net_queue_empty(empty, rx_free)
+        var 1 empty = net_queue_empty(rx_free);
         if ((!empty) && (!full)) {
-            net_cancel_signal(rx_free)
+            net_cancel_signal(rx_free);
             reprocess = true;
         }
     }
@@ -213,45 +204,38 @@ fun tx_provide() {
 
     while (reprocess) {
         while (true) {
-            var hw_ring_tx = lds {1,1,1,1} HW_RING_TX;
-            var hw_tail = hw_ring_tx.0;
-            var hw_head = hw_ring_tx.1;
-            var hw_capacity = hw_ring_tx.2;
-            net_queue_empty(empty, tx_active)
-            if (queue_full(hw_head, hw_tail, hw_capacity) || empty) {
+            var hw_ring_tx = lds {1,1,1} HW_RING_TX;
+            var 1 empty = net_queue_empty(tx_active);
+            var 1 full = hw_queue_full(hw_ring_tx);
+            if (full || empty) {
                 break;
             }
 
             var {1,1} net_buffer = net_dequeue(tx_active, capacity);
 
-            var stat = TXD_READY | TXD_ADDCRC | TXD_LAST; // uint16_t
-            pnk_modulo(idx, hw_tail, hw_capacity)
-            if (idx + 1 == hw_capacity) {
-                stat = stat | WRAP;
-            }
+            var hw_tail = hw_ring_tx.0;
+            var hw_capacity = hw_ring_tx.2;
+            var 1 idx = pnk_modulo(hw_tail, hw_capacity);
 
             var mdata_buff = TX_MDATA_ADDR_IDX(idx);
-            var io_or_offset = net_buffer.0;
-            var len = net_buffer.1;
-            !stw mdata_buff, io_or_offset;
-            !stw mdata_buff + @biw, len;
-
+            st mdata_buff, net_buffer;
             var descr = hw_ring_tx.3;
-            update_ring_slot(descr, idx, io_or_offset, len, stat)
+            tx_update_device_ring_slot(HW_DESCR_TX, idx, net_buffer, hw_capacity);
 
             hw_tail = hw_tail + 1;
-            st HW_RING_TX, <hw_tail, hw_head, hw_capacity, descr>;
-            set_eth_tdar(TDAR_TDAR, eth)
+            var hw_head = hw_ring_tx.1;
+            st HW_RING_TX, <hw_tail, hw_head>;
+            set_device_TDAR();
         }
 
-        net_request_signal(tx_active)
+        net_request_signal(tx_active);
         reprocess = false;
 
-        var hw_ring_tx = lds {1,1,1,1} HW_RING_TX;
-        var full = queue_full(hw_ring_tx.1, hw_ring_tx.0, hw_ring_tx.2);
-        net_queue_empty(empty, tx_active)
+        var hw_ring_tx = lds {1,1,1} HW_RING_TX;
+        var 1 full = hw_queue_full(hw_ring_tx);
+        var 1 empty = net_queue_empty(tx_active);
         if ((!full) && (!empty)) {
-            net_cancel_signal(tx_active)
+            net_cancel_signal(tx_active);
             reprocess = true;
         }
     }
@@ -272,25 +256,21 @@ fun tx_return() {
     var capacity = tx_queue.2;
 
     while (true) {
-        var hw_ring_tx = lds {1,1,1,1} HW_RING_TX;
-        var hw_tail = hw_ring_tx.0;
-        var hw_head = hw_ring_tx.1;
-        if (queue_empty(hw_head, hw_tail)) {
+        var hw_ring_tx = lds {1,1,1} HW_RING_TX;
+        var 1 empty = hw_queue_empty(hw_ring_tx);
+        if (empty) {
             break;
         }
 
-        THREAD_MEMORY_ACQUIRE()
-
         // Ensure that this buffer has been sent by the device
+        var hw_head = hw_ring_tx.1;
         var hw_capacity = hw_ring_tx.2;
-        var descr = hw_ring_tx.3;
-        pnk_modulo(idx, hw_head, hw_capacity)
-        var dscr_addr = DESCRP_ADDR_IDX(idx);
+        var 1 idx = pnk_modulo(hw_head, hw_ring_tx.2);
+        var dscr_addr = DESCRP_ADDR_IDX(HW_DESCR_TX, idx);
         var descriptor = 0;
         !ld32 descriptor, dscr_addr;
-
-        var stat = (descriptor >> 16) & MASK_16;
-        if (stat & TXD_READY) {
+        var 1 not_sent = tx_descriptor_ready(descriptor);
+        if (not_sent) {
             break;
         }
 
@@ -300,40 +280,38 @@ fun tx_return() {
 
         enqueued = true;
         hw_head = hw_head + 1;
-        st HW_RING_TX, <hw_tail, hw_head, hw_capacity, descr>;
+        var hw_tail = hw_ring_tx.0;
+        st HW_RING_TX, <hw_tail, hw_head>;
     }
 
-    net_require_signal(signal, tx_free)
+    var 1 signal = net_require_signal(tx_free);
     if (enqueued && signal) {
-        net_cancel_signal(tx_free)
+        net_cancel_signal(tx_free);
         microkit_notify(TX_CH)
     }
     return 0;
 }
 
 fun handle_irq() {
-    var eth = ETH_REGS;
-    get_eth_eir(eir, eth)
+    var 1 EIR = get_device_EIR();
+    clear_device_EIR();
 
-    var e = eir & IRQ_MASK;
-    set_eth_eir(e, eth)
-
-    while (e & IRQ_MASK) {
-        if (e & NETIRQ_TXF) {
-            tx_return();
-            tx_provide();
-        }
-        if (e & NETIRQ_RXF) {
+    while (true) {
+        var 1 rx_work = is_EIR_RXF(EIR);
+        var 1 tx_work = is_EIR_TXF(EIR);
+        if (rx_work) {
             rx_return();
             rx_provide();
         }
-        // TODO: sddf_dprintf("ETH|ERROR: System bus/uDMA\n");
-        // if (e & NETIRQ_EBERR) {
-        //    skip;
-        // }
-        get_eth_eir(eir, eth)
-        e = eir & IRQ_MASK;
-        set_eth_eir(e, eth)
+        if (tx_work) {
+            tx_return();
+            tx_provide();
+        }
+        if ((!rx_work) && (!tx_work)) {
+            break;
+        }
+        EIR = get_device_EIR();
+        clear_device_EIR();
     }
     return 0;
 }

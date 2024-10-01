@@ -1,7 +1,7 @@
 /*
- * Helper functions/macros for pancake to access 
+ * Helper functions/macros for pancake to access
  * the shared memory and network queues and buffers
- * 
+ *
  * Can't use shape/struct at the moment since it's in shared memory
 */
 
@@ -44,18 +44,5 @@ typedef struct net_queue {
 #define set_head(head, queue)       \
     !stw queue + @biw, head;        \
 
-#define get_consumer_signalled(signalled, queue)\
-    var signalled = 0;                          \
-    !ld8 signalled, queue + 2 * @biw;           \
-
-#define clear_consumer_signalled(queue) \
-    var signal = 0;                     \
-    !st8 queue + 2 * @biw, signal;      \
-
-#define set_consumer_signalled(queue)   \
-    var signal = 1;                     \
-    !st8 queue + 2 * @biw, signal;      \
-
-#define get_buffer_desc_addr(desc, index, queue)                \
-    var desc = queue + 3 * @biw + index * NET_BUFF_DESC_SIZE;   \
+#define buffer_addr_idx(index, queue)  (queue + 3 * @biw + index * NET_BUFF_DESC_SIZE)
 

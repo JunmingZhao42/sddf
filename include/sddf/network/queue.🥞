@@ -5,12 +5,12 @@
  *
  * @return true indicates the queue is empty, false otherwise.
  */
-#define net_queue_empty(empty, queue)   \
-    get_tail(tail, queue)               \
-    get_head(head, queue)               \
-    var empty = (tail - head) == 0;     \
-
-#define queue_empty(head, tail)     (head == tail)
+fun net_queue_empty(1 queue_ptr) {
+    get_tail(tail, queue_ptr)
+    get_head(head, queue_ptr)
+    var empty = (tail - head) == 0;
+    return empty;
+}
 
 /**
  * Check if the network queue is full.
@@ -19,12 +19,12 @@
  *
  * @return true indicates the queue is full, false otherwise.
  */
-#define net_queue_full(full, queue, length) \
-    get_tail(tail, queue)                   \
-    get_head(head, queue)                   \
-    var full = (tail - head) == length;     \
-
-#define queue_full(head, tail, length)  ((tail - head) == length)
+fun net_queue_full(1 queue, 1 length) {
+    get_tail(tail, queue)
+    get_head(head, queue)
+    var full = (tail - head) == length;
+    return full;
+}
 
 /**
  * Enqueue an element into a queue.
@@ -36,22 +36,18 @@
  * @return -1 when queue is full, 0 on success.
  */
 fun net_enqueue(1 queue, 1 capacity, 1 buffer_addr) {
-    net_queue_full(full, queue, capacity)
+    var 1 full = net_queue_full(queue, capacity);
     if (full) {
         return -1;
     }
 
     get_tail(tail, queue)
-    pnk_modulo(idx, tail, capacity)
-    get_buffer_desc_addr(buff, idx, queue)
+    var 1 idx = pnk_modulo(tail, capacity);
+    var buff = buffer_addr_idx(idx, queue);
 
     var buffer = lds {1,1} buffer_addr;
     !stw buff, (buffer.0);
     !stw buff + @biw, (buffer.1);
-
-// TODO: #ifdef CONFIG_ENABLE_SMP_SUPPORT
-// Todo: remove this
-    THREAD_MEMORY_RELEASE()
 
     tail = tail + 1;
     set_tail(tail, queue)
@@ -68,20 +64,19 @@ fun net_enqueue(1 queue, 1 capacity, 1 buffer_addr) {
  * @return -1 when queue is empty, 0 on success.
  */
 fun net_dequeue(1 queue, 1 capacity) {
-    net_queue_empty(empty, queue)
+    var 1 empty = net_queue_empty(queue);
     if (empty) {
         return <-1, -1>;
     }
 
     get_head(head, queue)
-    pnk_modulo(idx, head, capacity)
-    get_buffer_desc_addr(buff, idx, queue)
+    var 1 idx = pnk_modulo(head, capacity);
+    var buff = buffer_addr_idx(idx, queue);
 
     var io_or_offset = 0;
     !ldw io_or_offset, buff;
     var len = 0;
     !ldw len, buff + @biw;
-    THREAD_MEMORY_RELEASE()
 
     head = head + 1;
     set_head(head, queue)
@@ -93,25 +88,34 @@ fun net_dequeue(1 queue, 1 capacity) {
  *
  * @param queue queue that requires signalling upon enqueuing.
  */
-#define net_request_signal(queue)       \
-    clear_consumer_signalled(queue)     \
-    THREAD_MEMORY_RELEASE()             \
+fun net_request_signal(1 queue_ptr)
+{
+    var signal = 0;
+    !st8 queue_ptr + 2 * @biw, signal;
+    return 0;
+}
 
 /**
  * Indicate to producer of the queue that consumer has been signalled.
  *
  * @param queue queue that has been signalled.
  */
-#define net_cancel_signal(queue)        \
-    set_consumer_signalled(queue)       \
-    THREAD_MEMORY_RELEASE()             \
+fun net_cancel_signal(1 queue_ptr)
+{
+    var signal = 1;
+    !st8 queue_ptr + 2 * @biw, signal;
+    return 0;
+}
 
 /**
  * Consumer of the queue requires signalling.
  *
  * @param queue queue to check.
  */
-#define net_require_signal(signal, queue)       \
-    get_consumer_signalled(signalled, queue)    \
-    var signal = (!signalled);
 
+fun net_require_signal(1 queue_ptr)
+{
+    var signalled = 0;
+    !ld8 signalled, queue_ptr + 2 * @biw;
+    return !signalled;
+}
