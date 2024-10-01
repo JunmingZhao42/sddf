@@ -1,45 +1,40 @@
-/* Pancake heap layout
-
-              pancake heap 1024*9 bytes
-             +--------------------------+
-      [0..7] | eth regs addr            |
-             +--------------------------+
-     [9..31] | rx_queue {               |
-             | free buffer ptr          +---->
-             | active buffer ptr        +----> shared mem with virt_rx
-             | queue capacity           |
-             |}                         |
-             +--------------------------+
-    [32..55] | tx queue {               |
-             | free buffer ptr          +---->
-             | active buffer ptr        +----> shared mem with virt_tx
-             | queue capacity           |
-             |}                         |
-             +--------------------------+
-  [56..4175] | hw_ring tx {             |
-             |  tail index              |
-             |  head index              |
-             |  capacity                |
-             |  buffers meta data       |
-             |  buffer descriptors ptr  +----> shared mem with device
-             | }                        |
-             +--------------------------+
-[4176..8295] | hw_ring rx {             |
-             |  tail index              |
-             |  head index              |
-             |  capacity                |
-             |  buffers meta data       |
-             |  buffer descriptors ptr  +----> shared mem with device
-             | }                        |
-             +--------------------------+
- [8296..9216]| dynamic heap             |
-             |                          |
-             |                          |
-             |                          |
-             |                          |
-             |                          |
-             +--------------------------+
- */
+/* pancake heap                                
+                                                      
+        word                                                             
+              ┌──────────────────────────┐                               
+           0  │ eth regs addr            │                               
+              ├──────────────────────────┤                               
+              │ rx_queue {               │                               
+           1  │ free buffer ptr    ──────┼────►                          
+           2  │ active buffer ptr  ──────┼────► shared mem with virt_rx  
+           3  │ queue capacity           │                               
+              │}                         │                               
+              ├──────────────────────────┤                               
+              │ tx queue {               │                               
+           4  │ free buffer ptr    ──────┼────►                          
+           5  │ active buffer ptr  ──────┼────► shared mem with virt_tx  
+           6  │ queue capacity           │                               
+              │}                         │                               
+              ├──────────────────────────┤                               
+              │ hw_ring tx {             │                               
+           7  │  tail index              │                               
+           8  │  head index              │                               
+           9  │  capacity                │                               
+          10  │  buffer descriptors ptr ─┼────► shared mem with device   
+              │ }                        │                               
+              ├──────────────────────────┤                               
+              │ hw_ring rx {             │                               
+          11  │  tail index              │                               
+          12  │  head index              │                               
+          13  │  capacity                │                               
+          14  │  buffer descriptors ptr ─┼────► shared mem with device   
+              │ }                        │                               
+              ├──────────────────────────┤                               
+     15..527  │ rx meta data             │                               
+              ├──────────────────────────┤                               
+   527..1039  │ tx meta data             │                               
+              ├──────────────────────────┤                                                        
+*/                                                                                                                                             
 
 #define IRQ_CH 0
 #define TX_CH  1
@@ -48,23 +43,25 @@
 #define MAX_COUNT       256
 
 #define ETH_REGS        (lds 1 @base)
-#define RX_QUEUE_ADDR   (@base + 3 * @biw)
-#define TX_QUEUE_ADDR   (@base + 6 * @biw)
-#define RX_MDATA_ADDR   (@base + 32 * @biw)
-#define TX_MDATA_ADDR   (@base + 576 * @biw)
+#define RX_QUEUE_ADDR   (@base + 1 * @biw)
+#define TX_QUEUE_ADDR   (@base + 4 * @biw)
+#define RX_MDATA_ADDR   (@base + 15 * @biw)
+#define TX_MDATA_ADDR   (@base + 527 * @biw)
 
 #define RX_MDATA_ADDR_IDX(idx)  (RX_MDATA_ADDR + idx * NET_BUFF_DESC_SIZE)
 #define TX_MDATA_ADDR_IDX(idx)  (TX_MDATA_ADDR + idx * NET_BUFF_DESC_SIZE)
 
-#define DESCRIPTROR_SIZE    8
+#define DESCRIPTROR_SIZE        8
+#define DESCRP_ADDR_IDX(idx)    (descr + idx * DESCRIPTROR_SIZE)
+
 #define HW_RING_SIZE        (4 * @biw)
-#define HW_RING_RX          (@base + 9 * @biw)
-#define HW_RING_TX          (@base + 9 * @biw + HW_RING_SIZE)
-#define ETH_USER_BASE       (@base + @biw * 1536)
+#define HW_RING_RX          (@base + 7 * @biw)
+#define HW_RING_TX          (@base + 7 * @biw + HW_RING_SIZE)
 
 // Todo: change this hack once !st16/!ld16 is supported in pancake
+// Todo: call driver functions (empty) after accessing driver registers
 #define update_ring_slot(descr, idx, phys, len, stat)       \
-    var dst_addr = descr + idx * DESCRIPTROR_SIZE;          \
+    var dst_addr = DESCRP_ADDR_IDX(idx);                    \
     var descriptor = (stat << 16) | len;                    \
     !st32 dst_addr + 4, phys;                               \
     THREAD_MEMORY_RELEASE()                                 \
@@ -102,7 +99,7 @@ fun rx_return() {
 
         // volatile struct descriptor *d = &(hw_ring_rx->descr[hw_ring_rx->head]);
         var descr = hw_ring_rx.3;
-        var dscr_addr = descr + idx * DESCRIPTROR_SIZE; // this is an shared mem address
+        var dscr_addr = DESCRP_ADDR_IDX(idx); // this is an shared mem address
         var descriptor = 0;
         !ld32 descriptor, dscr_addr;
 
@@ -156,9 +153,7 @@ fun rx_provide() {
             }
             THREAD_MEMORY_ACQUIRE()
 
-            var stack_buff = ETH_USER_BASE;
-            var 1 err = net_dequeue(rx_free, capacity, stack_buff);
-            var net_buffer = lds {1,1} stack_buff;
+            var {1,1} net_buffer = net_dequeue(rx_free, capacity);
 
             var stat = RXD_EMPTY; // uint16_t
             pnk_modulo(idx, hw_tail, hw_capacity)
@@ -227,9 +222,7 @@ fun tx_provide() {
                 break;
             }
 
-            var stack_buff = ETH_USER_BASE;
-            var 1 err = net_dequeue(tx_active, capacity, stack_buff);
-            var net_buffer = lds {1,1} stack_buff;
+            var {1,1} net_buffer = net_dequeue(tx_active, capacity);
 
             var stat = TXD_READY | TXD_ADDCRC | TXD_LAST; // uint16_t
             pnk_modulo(idx, hw_tail, hw_capacity)
@@ -292,7 +285,7 @@ fun tx_return() {
         var hw_capacity = hw_ring_tx.2;
         var descr = hw_ring_tx.3;
         pnk_modulo(idx, hw_head, hw_capacity)
-        var dscr_addr = descr + idx * DESCRIPTROR_SIZE;
+        var dscr_addr = DESCRP_ADDR_IDX(idx);
         var descriptor = 0;
         !ld32 descriptor, dscr_addr;
 

@@ -59,7 +59,7 @@ net_queue_handle_t *tx_queue;
 
 volatile struct enet_regs *eth;
 
-static char cml_memory[1024*17];
+static char cml_memory[1024*18];
 extern void *cml_heap;
 extern void *cml_stack;
 extern void *cml_stackend;
@@ -85,7 +85,7 @@ void cml_clear() {
 
 void init_pancake_mem() {
     unsigned long cml_heap_sz = 1024*16;
-    unsigned long cml_stack_sz = 1024;
+    unsigned long cml_stack_sz = 1024*2;
     cml_heap = cml_memory;
     cml_stack = cml_heap + cml_heap_sz;
     cml_stackend = cml_stack + cml_stack_sz;
@@ -94,11 +94,11 @@ void init_pancake_mem() {
 void init_pancake_data() {
     uintptr_t *heap = (uintptr_t *)cml_heap;
     heap[0] = (uintptr_t) eth;
-    rx_queue = (net_queue_handle_t *) &heap[3];
-    tx_queue = (net_queue_handle_t *) &heap[6];
-    hw_ring_rx = (hw_ring_t *) &heap[9];
+    rx_queue = (net_queue_handle_t *) &heap[1];
+    tx_queue = (net_queue_handle_t *) &heap[4];
+    hw_ring_rx = (hw_ring_t *) &heap[7];
     int offset = sizeof(hw_ring_t);
-    hw_ring_tx = (hw_ring_t *) ((char *) &heap[9] + offset);
+    hw_ring_tx = (hw_ring_t *) ((char *) &heap[7] + offset);
 }
 
 static void eth_setup(void)

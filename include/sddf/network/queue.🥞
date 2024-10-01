@@ -67,26 +67,25 @@ fun net_enqueue(1 queue, 1 capacity, 1 buffer_addr) {
  *
  * @return -1 when queue is empty, 0 on success.
  */
-fun net_dequeue(1 queue, 1 capacity, 1 buffer_addr) {
+fun net_dequeue(1 queue, 1 capacity) {
     net_queue_empty(empty, queue)
     if (empty) {
-        return -1;
+        return <-1, -1>;
     }
 
     get_head(head, queue)
     pnk_modulo(idx, head, capacity)
     get_buffer_desc_addr(buff, idx, queue)
 
-    var buf_v = 0;
-    !ldw buf_v, buff;
-    !stw buffer_addr, buf_v;
-    !ldw buf_v, buff + @biw;
-    !stw buffer_addr + @biw, buf_v;
+    var io_or_offset = 0;
+    !ldw io_or_offset, buff;
+    var len = 0;
+    !ldw len, buff + @biw;
     THREAD_MEMORY_RELEASE()
 
     head = head + 1;
     set_head(head, queue)
-    return 0;
+    return <io_or_offset, len>;
 }
 
 /**
