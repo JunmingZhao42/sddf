@@ -1,0 +1,6 @@
+field HW_RING_RX: Seq[Int]
+field HW_RING_TX: Seq[Int]
+
+method wakeup_receive()
+
+method wakeup_transmit()
