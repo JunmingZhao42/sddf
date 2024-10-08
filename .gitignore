@@ -17,3 +17,5 @@ zig-out/
 .zig-cache/
 *.S
 *.s
+temp.vpr
+temp.pnk

@@ -55,12 +55,14 @@
 #define HW_DESCR_TX     (lds 1 (@base + 14 * @biw))
 
 fun hw_queue_empty({1,1,1} ring) {
+    /*@ ensures (retval == 0) || (retval == 1) @*/
     var tail = ring.0;
     var head = ring.1;
     return head == tail;
 }
 
 fun hw_queue_full({1,1,1} ring) {
+    /*@ ensures (retval == 0) || (retval == 1) @*/
     var tail = ring.0;
     var head = ring.1;
     var length = ring.2;
@@ -81,6 +83,13 @@ fun main () {
  * 4. if `rx_active` requires signalling, cancel the signal and notify `virt_rx` via microkit
  */
 fun rx_return() {
+    /*@ requires acc(heap[1]) @*/
+    /*@ requires acc(heap[2]) @*/
+    /*@ requires acc(heap[3]) @*/
+    /*@ requires acc(heap[7]) @*/
+    /*@ requires acc(heap[8]) @*/
+    /*@ requires acc(heap[9]) @*/
+    /*@ requires acc(heap[10]) @*/
     var packets_transferred = false;
     var rx_queue = lds {1,1,1} RX_QUEUE_ADDR;
     var rx_active = rx_queue.1;
@@ -135,11 +144,17 @@ fun rx_return() {
  * 6. recheck (1), process more if needed
 */
 fun rx_provide() {
+    /*@ requires acc(heap[1]) @*/
+    /*@ requires acc(heap[2]) @*/
+    /*@ requires acc(heap[3]) @*/
+    /*@ requires acc(heap[7]) @*/
+    /*@ requires acc(heap[8]) @*/
+    /*@ requires acc(heap[9]) @*/
+    /*@ requires acc(heap[10]) @*/
     var reprocess = true;
     var rx_queue = lds {1,1,1} RX_QUEUE_ADDR;
     var rx_free = rx_queue.0;
     var capacity = rx_queue.2;
-    var eth = ETH_REGS;
 
     while (reprocess) {
         while (true) {
@@ -150,7 +165,9 @@ fun rx_provide() {
                 break;
             }
 
-            var {1,1} net_buffer = net_dequeue(rx_free, capacity);
+            var temp_addr = @base + 1040 * @biw;
+            var 1 ret = net_dequeue(rx_free, capacity, temp_addr);
+            var net_buffer = lds {1,1} temp_addr;
 
             var hw_tail = hw_ring_rx.0;
             var hw_capacity = hw_ring_rx.2;
@@ -200,7 +217,6 @@ fun tx_provide() {
     var tx_queue = lds {1,1,1} TX_QUEUE_ADDR;
     var tx_active = tx_queue.1;
     var capacity = tx_queue.2;
-    var eth = ETH_REGS;
 
     while (reprocess) {
         while (true) {
@@ -211,7 +227,9 @@ fun tx_provide() {
                 break;
             }
 
-            var {1,1} net_buffer = net_dequeue(tx_active, capacity);
+            var temp_addr = @base + 1040 * @biw;
+            var 1 ret = net_dequeue(tx_active, capacity, temp_addr);
+            var net_buffer = lds {1,1} temp_addr;
 
             var hw_tail = hw_ring_tx.0;
             var hw_capacity = hw_ring_tx.2;
@@ -219,7 +237,6 @@ fun tx_provide() {
 
             var mdata_buff = TX_MDATA_ADDR_IDX(idx);
             st mdata_buff, net_buffer;
-            var descr = hw_ring_tx.3;
             tx_update_device_ring_slot(HW_DESCR_TX, idx, net_buffer, hw_capacity);
 
             hw_tail = hw_tail + 1;

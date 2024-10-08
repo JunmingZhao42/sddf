@@ -18,11 +18,13 @@
 
 #define RXD_EMPTY       (1 << 15)
 #define WRAP            (1 << 13)
+#define DESCR_RXD_EMPTY (1 << 31)
 
 #define TXD_READY       (1 << 15)
 #define TXD_ADDCRC      (1 << 10)
 #define TXD_LAST        (1 << 11)
 #define TXD_STAT        (TXD_READY | TXD_ADDCRC | TXD_LAST)
+#define DESCR_TXD_READY (1 << 31)
 
 #define RDAR_RDAR       (1 << 24) /* RX descriptor active */
 #define TDAR_TDAR       (1 << 24) /* TX descriptor active */
@@ -43,6 +45,8 @@
 // IRQs for RXF and TXF.
 fun get_device_EIR()
 {
+    /*@ requires acc(heap[@base]) @*/
+    /*@ ensures acc(heap[@base]) @*/
     var eth = ETH_REGS;
     var eir = 0;
     !ld32 eir, (eth + EIR_OFFSET);
@@ -51,17 +55,21 @@ fun get_device_EIR()
 
 fun is_EIR_RXF(1 eir)
 {
+    /*@ ensures (retval == 1) || (retval == 0) @*/
     return (eir & NETIRQ_RXF) != 0;
 }
 
 fun is_EIR_TXF(1 eir)
 {
+    /*@ ensures (retval == 1) || (retval == 0) @*/
     return (eir & NETIRQ_TXF) != 0;
 }
 
 // Writing a 1 to an EIR bit clears it; writing 0 has no effect.
 fun clear_device_EIR()
 {
+    /*@ requires acc(heap[@base]) @*/
+    /*@ ensures acc(heap[@base]) @*/
     var eth = ETH_REGS;
     !st32 (eth + EIR_OFFSET), IRQ_MASK;
     return 0;
@@ -69,35 +77,43 @@ fun clear_device_EIR()
 
 fun set_device_RDAR()
 {
+    /*@ requires acc(heap[@base]) @*/
+    /*@ ensures acc(heap[@base]) @*/
     var eth = ETH_REGS;
     !st32 (eth + RDAR_OFFSET), RDAR_RDAR;
+    /* @ wakeup_device_receive() @*/
     return 0;
 }
 
 fun set_device_TDAR()
 {
+    /*@ requires acc(heap[@base]) @*/
+    /*@ ensures acc(heap[@base]) @*/
     var eth = ETH_REGS;
     !st32 (eth + TDAR_OFFSET), TDAR_TDAR;
+    /* @ wakeup_device_transmit() @*/
     return 0;
 }
 
 fun descriptor_get_len(1 descriptor)
 {
+    /*@ ensures (retval >= 1) && (retval < 65535) @*/
     var result = descriptor & MASK_16;
+    /*@ inhale (result >= 1) && (result < 65535) @*/
     return result;
 }
 
 fun rx_descriptor_empty(1 descriptor)
 {
-    var stat = (descriptor >> 16) & MASK_16;
-    var empty = (stat & RXD_EMPTY) != 0;
+    /*@ ensures (retval == 1) || (retval == 0) @*/
+    var empty = (descriptor & DESCR_RXD_EMPTY) != 0;
     return empty;
 }
 
 fun tx_descriptor_ready(1 descriptor)
 {
-    var stat = (descriptor >> 16) & MASK_16;
-    var ready = (stat & TXD_READY) != 0;
+    /*@ ensures (retval == 1) || (retval == 0) @*/
+    var ready = (descriptor & DESCR_TXD_READY) != 0;
     return ready;
 }
 

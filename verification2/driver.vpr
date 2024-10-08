@@ -1,0 +1,1620 @@
+method ffi_microkit_notify(x1: Int, x2: Int, x3: Int, x4: Int)
+method ffi_microkit_deferred_irq_ack(x1: Int, x2: Int, x3: Int, x4: Int)
+method ffi_microkit_deferred_notify(x1: Int, x2: Int, x3: Int, x4: Int)
+domain IArray  {
+  
+  function slot(a: IArray, i: Int): Ref 
+  
+  function alen(a: IArray): Int 
+  
+  function first(r: Ref): IArray 
+  
+  function second(r: Ref): Int 
+  
+  axiom all_diff {
+    (forall a: IArray, i: Int ::
+      { slot(a, i) }
+      first(slot(a, i)) == a && second(slot(a, i)) == i)
+  }
+  
+  axiom len_nonneg {
+    (forall a: IArray :: { alen(a) } alen(a) >= 0)
+  }
+}
+
+domain BitVectorDomain64 interpretation (SMTLIB: "(_ BitVec 64)", Boogie: "bv64") {
+  
+  function not(a: BitVectorDomain64): BitVectorDomain64 interpretation "bvnot"
+  
+  function bv64_xor(a: BitVectorDomain64, b: BitVectorDomain64): BitVectorDomain64 interpretation "bvxor"
+  
+  function bv64_and(a: BitVectorDomain64, b: BitVectorDomain64): BitVectorDomain64 interpretation "bvand"
+  
+  function bv64_or(a: BitVectorDomain64, b: BitVectorDomain64): BitVectorDomain64 interpretation "bvor"
+  
+  function bv64_shl(a: BitVectorDomain64, b: BitVectorDomain64): BitVectorDomain64 interpretation "bvshl"
+  
+  function bv64_lshr(a: BitVectorDomain64, b: BitVectorDomain64): BitVectorDomain64 interpretation "bvlshr"
+  
+  function bv64_ashr(a: BitVectorDomain64, b: BitVectorDomain64): BitVectorDomain64 interpretation "bvashr"
+  
+  function bv64_from_int(i: Int): BitVectorDomain64 interpretation "(_ int2bv 64)"
+  
+  function bv64_to_int(i: BitVectorDomain64): Int interpretation "(_ bv2int 64)"
+}
+
+field heap_elem: Int
+
+method copy_slice(src: IArray, src_idx: Int, dst: IArray, dst_idx: Int, length: Int)
+  requires 0 <= src_idx
+  requires src_idx <= alen(src)
+  requires src_idx + length <= alen(src)
+  requires (forall j: Int ::0 <= src_idx && src_idx <= j &&
+      (j < src_idx + length && src_idx + length <= alen(src)) ==>
+      acc(slot(src, j).heap_elem, wildcard))
+  requires 0 <= dst_idx
+  requires dst_idx <= alen(dst)
+  requires dst_idx + length <= alen(dst)
+  requires (forall j: Int ::0 <= dst_idx && dst_idx <= j &&
+      (j < dst_idx + length && dst_idx + length <= alen(dst)) ==>
+      acc(slot(dst, j).heap_elem, write))
+  ensures (forall j: Int ::0 <= src_idx && src_idx <= j &&
+      (j < src_idx + length && src_idx + length <= alen(src)) ==>
+      acc(slot(src, j).heap_elem, wildcard))
+  ensures (forall j: Int ::0 <= dst_idx && dst_idx <= j &&
+      (j < dst_idx + length && dst_idx + length <= alen(dst)) ==>
+      acc(slot(dst, j).heap_elem, write))
+  ensures (forall i: Int ::0 <= i && i < length ==>
+      old(slot(src, src_idx + i).heap_elem) ==
+      slot(src, src_idx + i).heap_elem)
+  ensures (forall i: Int ::0 <= i && i < length ==>
+      slot(src, src_idx + i).heap_elem == slot(dst, dst_idx + i).heap_elem)
+
+
+method create_slice(src: IArray, src_idx: Int, length: Int)
+  returns (dst: IArray)
+  requires 0 <= src_idx
+  requires src_idx <= alen(src)
+  requires src_idx + length <= alen(src)
+  requires (forall j: Int ::0 <= src_idx && src_idx <= j &&
+      (j < src_idx + length && src_idx + length <= alen(src)) ==>
+      acc(slot(src, j).heap_elem, wildcard))
+  ensures length == alen(dst)
+  ensures (forall j: Int ::0 <= src_idx && src_idx <= j &&
+      (j < src_idx + length && src_idx + length <= alen(src)) ==>
+      acc(slot(src, j).heap_elem, wildcard))
+  ensures (forall j: Int ::0 <= 0 && 0 <= j &&
+      (j < 0 + length && 0 + length <= alen(dst)) ==>
+      acc(slot(dst, j).heap_elem, write))
+  ensures (forall i: Int ::0 <= i && i < length ==>
+      old(slot(src, src_idx + i).heap_elem) ==
+      slot(src, src_idx + i).heap_elem)
+  ensures (forall i: Int ::0 <= i && i < length ==>
+      slot(src, src_idx + i).heap_elem == slot(dst, i).heap_elem)
+{
+  inhale length == alen(dst)
+  inhale (forall j: Int ::0 <= 0 && 0 <= j &&
+      (j < 0 + length && 0 + length <= alen(dst)) ==>
+      acc(slot(dst, j).heap_elem, write))
+  copy_slice(src, src_idx, dst, 0, length)
+}
+
+method shared_load(address: Int) returns (value: Int)
+
+
+method shared_store(address: Int, value: Int)
+
+
+method f_main(heap: IArray) returns (retval: Int)
+  requires alen(heap) == 16384
+{
+  {
+    var main_fr_0_1: Int
+    var fr_2: Int
+    fr_2 := f_rx_provide(heap)
+    main_fr_0_1 := fr_2
+    // skip
+  }
+  {
+    var main_fr_3_4: Int
+    var fr_5: Int
+    fr_5 := f_tx_provide(heap)
+    main_fr_3_4 := fr_5
+    // skip
+  }
+  retval := 0
+  goto return_label
+  label return_label
+  refute false
+}
+
+method f_pnk_modulo(heap: IArray, arg_a: Int, arg_b: Int)
+  returns (retval: Int)
+  requires alen(heap) == 16384
+{
+  var pnk_modulo_a_6: Int
+  var pnk_modulo_b_7: Int
+  pnk_modulo_a_6 := arg_a
+  pnk_modulo_b_7 := arg_b
+  {
+    var pnk_modulo_result_8: Int
+    pnk_modulo_result_8 := bv64_to_int(bv64_and(bv64_from_int(pnk_modulo_a_6),
+      bv64_from_int(pnk_modulo_b_7 - 1)))
+    retval := pnk_modulo_result_8
+    goto return_label
+  }
+  label return_label
+  refute false
+}
+
+method f_net_queue_empty(heap: IArray, arg_queue_ptr: Int)
+  returns (retval: Int)
+  requires alen(heap) == 16384
+  ensures retval == 1 || retval == 0
+{
+  var net_queue_empty_queue_ptr_9: Int
+  net_queue_empty_queue_ptr_9 := arg_queue_ptr
+  // annotation pushed
+  {
+    var net_queue_empty_tail_10: Int
+    net_queue_empty_tail_10 := 0
+    net_queue_empty_tail_10 := shared_load(net_queue_empty_queue_ptr_9)
+    {
+      var net_queue_empty_head_11: Int
+      net_queue_empty_head_11 := 0
+      net_queue_empty_head_11 := shared_load(net_queue_empty_queue_ptr_9 +
+        8)
+      {
+        var net_queue_empty_empty_12: Int
+        net_queue_empty_empty_12 := (net_queue_empty_tail_10 -
+          net_queue_empty_head_11 ==
+          0 ?
+            1 :
+            0)
+        retval := net_queue_empty_empty_12
+        goto return_label
+      }
+    }
+  }
+  label return_label
+  refute false
+}
+
+method f_net_queue_full(heap: IArray, arg_queue: Int, arg_length: Int)
+  returns (retval: Int)
+  requires alen(heap) == 16384
+  ensures retval == 1 || retval == 0
+{
+  var net_queue_full_queue_13: Int
+  var net_queue_full_length_14: Int
+  net_queue_full_queue_13 := arg_queue
+  net_queue_full_length_14 := arg_length
+  // annotation pushed
+  {
+    var net_queue_full_tail_15: Int
+    net_queue_full_tail_15 := 0
+    net_queue_full_tail_15 := shared_load(net_queue_full_queue_13)
+    {
+      var net_queue_full_head_16: Int
+      net_queue_full_head_16 := 0
+      net_queue_full_head_16 := shared_load(net_queue_full_queue_13 + 8)
+      {
+        var net_queue_full_full_17: Int
+        net_queue_full_full_17 := (net_queue_full_tail_15 -
+          net_queue_full_head_16 ==
+          net_queue_full_length_14 ?
+            1 :
+            0)
+        retval := net_queue_full_full_17
+        goto return_label
+      }
+    }
+  }
+  label return_label
+  refute false
+}
+
+method f_net_enqueue(heap: IArray, arg_queue: Int, arg_capacity: Int, arg_buffer_addr: Int)
+  returns (retval: Int)
+  requires alen(heap) == 16384
+{
+  var net_enqueue_queue_18: Int
+  var net_enqueue_capacity_19: Int
+  var net_enqueue_buffer_addr_20: Int
+  net_enqueue_queue_18 := arg_queue
+  net_enqueue_capacity_19 := arg_capacity
+  net_enqueue_buffer_addr_20 := arg_buffer_addr
+  {
+    var net_enqueue_full_21: Int
+    var fr_22: Int
+    fr_22 := f_net_queue_full(heap, net_enqueue_queue_18, net_enqueue_capacity_19)
+    net_enqueue_full_21 := fr_22
+    if (net_enqueue_full_21 != 0) {
+      retval := -1
+      goto return_label
+    }
+    {
+      var net_enqueue_tail_23: Int
+      net_enqueue_tail_23 := 0
+      net_enqueue_tail_23 := shared_load(net_enqueue_queue_18)
+      {
+        var net_enqueue_idx_24: Int
+        var fr_25: Int
+        fr_25 := f_pnk_modulo(heap, net_enqueue_tail_23, net_enqueue_capacity_19)
+        net_enqueue_idx_24 := fr_25
+        {
+          var net_enqueue_buff_26: Int
+          net_enqueue_buff_26 := net_enqueue_queue_18 + 3 * 8 +
+            net_enqueue_idx_24 * (2 * 8)
+          {
+            var net_enqueue_buffer_27: IArray
+            var fr_28: IArray
+            assert net_enqueue_buffer_addr_20 % 8 == 0
+            fr_28 := create_slice(heap, net_enqueue_buffer_addr_20 / 8, 2)
+            net_enqueue_buffer_27 := fr_28
+            shared_store(net_enqueue_buff_26, slot(net_enqueue_buffer_27, 0).heap_elem)
+            shared_store(net_enqueue_buff_26 + 8, slot(net_enqueue_buffer_27,
+              1).heap_elem)
+            net_enqueue_tail_23 := net_enqueue_tail_23 + 1
+            shared_store(net_enqueue_queue_18, net_enqueue_tail_23)
+            retval := 0
+            goto return_label
+          }
+        }
+      }
+    }
+  }
+  label return_label
+  refute false
+}
+
+method f_net_dequeue(heap: IArray, arg_queue: Int, arg_capacity: Int, arg_temp_addr: Int)
+  returns (retval: Int)
+  requires alen(heap) == 16384
+{
+  var net_dequeue_queue_29: Int
+  var net_dequeue_capacity_30: Int
+  var net_dequeue_temp_addr_31: Int
+  net_dequeue_queue_29 := arg_queue
+  net_dequeue_capacity_30 := arg_capacity
+  net_dequeue_temp_addr_31 := arg_temp_addr
+  {
+    var net_dequeue_empty_32: Int
+    var fr_33: Int
+    fr_33 := f_net_queue_empty(heap, net_dequeue_queue_29)
+    net_dequeue_empty_32 := fr_33
+    if (net_dequeue_empty_32 != 0) {
+      retval := -1
+      goto return_label
+    }
+    {
+      var net_dequeue_head_34: Int
+      net_dequeue_head_34 := 0
+      net_dequeue_head_34 := shared_load(net_dequeue_queue_29 + 8)
+      {
+        var net_dequeue_idx_35: Int
+        var fr_36: Int
+        fr_36 := f_pnk_modulo(heap, net_dequeue_head_34, net_dequeue_capacity_30)
+        net_dequeue_idx_35 := fr_36
+        {
+          var net_dequeue_buff_37: Int
+          net_dequeue_buff_37 := net_dequeue_queue_29 + 3 * 8 +
+            net_dequeue_idx_35 * (2 * 8)
+          {
+            var net_dequeue_io_or_offset_38: Int
+            net_dequeue_io_or_offset_38 := 0
+            net_dequeue_io_or_offset_38 := shared_load(net_dequeue_buff_37)
+            assert net_dequeue_temp_addr_31 % 8 == 0
+            slot(heap, net_dequeue_temp_addr_31 / 8).heap_elem := net_dequeue_io_or_offset_38
+            {
+              var net_dequeue_len_39: Int
+              net_dequeue_len_39 := 0
+              net_dequeue_len_39 := shared_load(net_dequeue_buff_37 + 8)
+              assert (net_dequeue_temp_addr_31 + 8) % 8 == 0
+              slot(heap, (net_dequeue_temp_addr_31 + 8) / 8).heap_elem := net_dequeue_len_39
+              net_dequeue_head_34 := net_dequeue_head_34 + 1
+              shared_store(net_dequeue_queue_29 + 8, net_dequeue_head_34)
+              retval := 0
+              goto return_label
+            }
+          }
+        }
+      }
+    }
+  }
+  label return_label
+  refute false
+}
+
+method f_net_request_signal(heap: IArray, arg_queue_ptr: Int)
+  returns (retval: Int)
+  requires alen(heap) == 16384
+{
+  var net_request_signal_queue_ptr_40: Int
+  net_request_signal_queue_ptr_40 := arg_queue_ptr
+  {
+    var net_request_signal_signal_41: Int
+    net_request_signal_signal_41 := 0
+    shared_store(net_request_signal_queue_ptr_40 + 2 * 8, net_request_signal_signal_41)
+    retval := 0
+    goto return_label
+  }
+  label return_label
+  refute false
+}
+
+method f_net_cancel_signal(heap: IArray, arg_queue_ptr: Int)
+  returns (retval: Int)
+  requires alen(heap) == 16384
+{
+  var net_cancel_signal_queue_ptr_42: Int
+  net_cancel_signal_queue_ptr_42 := arg_queue_ptr
+  {
+    var net_cancel_signal_signal_43: Int
+    net_cancel_signal_signal_43 := 1
+    shared_store(net_cancel_signal_queue_ptr_42 + 2 * 8, net_cancel_signal_signal_43)
+    retval := 0
+    goto return_label
+  }
+  label return_label
+  refute false
+}
+
+method f_net_require_signal(heap: IArray, arg_queue_ptr: Int)
+  returns (retval: Int)
+  requires alen(heap) == 16384
+  ensures retval == 1 || retval == 0
+{
+  var net_require_signal_queue_ptr_44: Int
+  net_require_signal_queue_ptr_44 := arg_queue_ptr
+  // annotation pushed
+  {
+    var net_require_signal_signalled_45: Int
+    net_require_signal_signalled_45 := 0
+    net_require_signal_signalled_45 := shared_load(net_require_signal_queue_ptr_44 +
+      2 * 8)
+    retval := (0 == net_require_signal_signalled_45 ? 1 : 0)
+    goto return_label
+  }
+  label return_label
+  refute false
+}
+
+method f_get_device_EIR(heap: IArray) returns (retval: Int)
+  requires alen(heap) == 16384
+{
+  {
+    var get_device_EIR_eth_46: Int
+    assert 0 % 8 == 0
+    get_device_EIR_eth_46 := slot(heap, 0 / 8).heap_elem
+    {
+      var get_device_EIR_eir_47: Int
+      get_device_EIR_eir_47 := 0
+      get_device_EIR_eir_47 := shared_load(get_device_EIR_eth_46 + 4)
+      retval := get_device_EIR_eir_47
+      goto return_label
+    }
+  }
+  label return_label
+  refute false
+}
+
+method f_is_EIR_RXF(heap: IArray, arg_eir: Int) returns (retval: Int)
+  requires alen(heap) == 16384
+  ensures retval == 1 || retval == 0
+{
+  var is_EIR_RXF_eir_48: Int
+  is_EIR_RXF_eir_48 := arg_eir
+  // annotation pushed
+  retval := (bv64_to_int(bv64_and(bv64_from_int(is_EIR_RXF_eir_48), bv64_from_int(bv64_to_int(bv64_shl(bv64_from_int(1),
+    bv64_from_int(25)))))) !=
+    0 ?
+      1 :
+      0)
+  goto return_label
+  label return_label
+  refute false
+}
+
+method f_is_EIR_TXF(heap: IArray, arg_eir: Int) returns (retval: Int)
+  requires alen(heap) == 16384
+  ensures retval == 1 || retval == 0
+{
+  var is_EIR_TXF_eir_49: Int
+  is_EIR_TXF_eir_49 := arg_eir
+  // annotation pushed
+  retval := (bv64_to_int(bv64_and(bv64_from_int(is_EIR_TXF_eir_49), bv64_from_int(bv64_to_int(bv64_shl(bv64_from_int(1),
+    bv64_from_int(27)))))) !=
+    0 ?
+      1 :
+      0)
+  goto return_label
+  label return_label
+  refute false
+}
+
+method f_clear_device_EIR(heap: IArray) returns (retval: Int)
+  requires alen(heap) == 16384
+{
+  {
+    var clear_device_EIR_eth_50: Int
+    assert 0 % 8 == 0
+    clear_device_EIR_eth_50 := slot(heap, 0 / 8).heap_elem
+    shared_store(clear_device_EIR_eth_50 + 4, bv64_to_int(bv64_or(bv64_from_int(bv64_to_int(bv64_or(bv64_from_int(bv64_to_int(bv64_shl(bv64_from_int(1),
+      bv64_from_int(25)))), bv64_from_int(bv64_to_int(bv64_shl(bv64_from_int(1),
+      bv64_from_int(27))))))), bv64_from_int(bv64_to_int(bv64_shl(bv64_from_int(1),
+      bv64_from_int(22)))))))
+    retval := 0
+    goto return_label
+  }
+  label return_label
+  refute false
+}
+
+method f_set_device_RDAR(heap: IArray) returns (retval: Int)
+  requires alen(heap) == 16384
+{
+  {
+    var set_device_RDAR_eth_51: Int
+    assert 0 % 8 == 0
+    set_device_RDAR_eth_51 := slot(heap, 0 / 8).heap_elem
+    shared_store(set_device_RDAR_eth_51 + 16, bv64_to_int(bv64_shl(bv64_from_int(1),
+      bv64_from_int(24))))
+    retval := 0
+    goto return_label
+  }
+  label return_label
+  refute false
+}
+
+method f_set_device_TDAR(heap: IArray) returns (retval: Int)
+  requires alen(heap) == 16384
+{
+  {
+    var set_device_TDAR_eth_52: Int
+    assert 0 % 8 == 0
+    set_device_TDAR_eth_52 := slot(heap, 0 / 8).heap_elem
+    shared_store(set_device_TDAR_eth_52 + 20, bv64_to_int(bv64_shl(bv64_from_int(1),
+      bv64_from_int(24))))
+    retval := 0
+    goto return_label
+  }
+  label return_label
+  refute false
+}
+
+method f_descriptor_get_len(heap: IArray, arg_descriptor: Int)
+  returns (retval: Int)
+  requires alen(heap) == 16384
+  ensures retval >= 1 && retval < 65535
+{
+  var descriptor_get_len_descriptor_53: Int
+  descriptor_get_len_descriptor_53 := arg_descriptor
+  // annotation pushed
+  {
+    var descriptor_get_len_result_54: Int
+    descriptor_get_len_result_54 := bv64_to_int(bv64_and(bv64_from_int(descriptor_get_len_descriptor_53),
+      bv64_from_int(65535)))
+    inhale descriptor_get_len_result_54 >= 1 &&
+      descriptor_get_len_result_54 < 65535
+    retval := descriptor_get_len_result_54
+    goto return_label
+  }
+  label return_label
+  refute false
+}
+
+method f_rx_descriptor_empty(heap: IArray, arg_descriptor: Int)
+  returns (retval: Int)
+  requires alen(heap) == 16384
+  ensures retval == 1 || retval == 0
+{
+  var rx_descriptor_empty_descriptor_55: Int
+  rx_descriptor_empty_descriptor_55 := arg_descriptor
+  // annotation pushed
+  {
+    var rx_descriptor_empty_stat_56: Int
+    rx_descriptor_empty_stat_56 := bv64_to_int(bv64_and(bv64_from_int(bv64_to_int(bv64_ashr(bv64_from_int(rx_descriptor_empty_descriptor_55),
+      bv64_from_int(16)))), bv64_from_int(65535)))
+    {
+      var rx_descriptor_empty_empty_57: Int
+      rx_descriptor_empty_empty_57 := (bv64_to_int(bv64_and(bv64_from_int(rx_descriptor_empty_stat_56),
+        bv64_from_int(bv64_to_int(bv64_shl(bv64_from_int(1), bv64_from_int(15)))))) !=
+        0 ?
+          1 :
+          0)
+      retval := rx_descriptor_empty_empty_57
+      goto return_label
+    }
+  }
+  label return_label
+  refute false
+}
+
+method f_tx_descriptor_ready(heap: IArray, arg_descriptor: Int)
+  returns (retval: Int)
+  requires alen(heap) == 16384
+  ensures retval == 1 || retval == 0
+{
+  var tx_descriptor_ready_descriptor_58: Int
+  tx_descriptor_ready_descriptor_58 := arg_descriptor
+  // annotation pushed
+  {
+    var tx_descriptor_ready_stat_59: Int
+    tx_descriptor_ready_stat_59 := bv64_to_int(bv64_and(bv64_from_int(bv64_to_int(bv64_ashr(bv64_from_int(tx_descriptor_ready_descriptor_58),
+      bv64_from_int(16)))), bv64_from_int(65535)))
+    {
+      var tx_descriptor_ready_ready_60: Int
+      tx_descriptor_ready_ready_60 := (bv64_to_int(bv64_and(bv64_from_int(tx_descriptor_ready_stat_59),
+        bv64_from_int(bv64_to_int(bv64_shl(bv64_from_int(1), bv64_from_int(15)))))) !=
+        0 ?
+          1 :
+          0)
+      retval := tx_descriptor_ready_ready_60
+      goto return_label
+    }
+  }
+  label return_label
+  refute false
+}
+
+method f_rx_update_device_ring_slot(heap: IArray, arg_descr: Int, arg_idx: Int,
+  arg_net_buffer: IArray, arg_hw_capacity: Int)
+  returns (retval: Int)
+  requires alen(heap) == 16384
+  requires alen(arg_net_buffer) == 2 &&
+    (forall j: Int ::0 <= 0 && 0 <= j &&
+      (j < 0 + 2 && 0 + 2 <= alen(arg_net_buffer)) ==>
+      acc(slot(arg_net_buffer, j).heap_elem, write))
+{
+  var rx_update_device_ring_slot_descr_61: Int
+  var rx_update_device_ring_slot_idx_62: Int
+  var rx_update_device_ring_slot_net_buffer_63: IArray
+  var rx_update_device_ring_slot_hw_capacity_64: Int
+  rx_update_device_ring_slot_descr_61 := arg_descr
+  rx_update_device_ring_slot_idx_62 := arg_idx
+  rx_update_device_ring_slot_net_buffer_63 := arg_net_buffer
+  rx_update_device_ring_slot_hw_capacity_64 := arg_hw_capacity
+  {
+    var rx_update_device_ring_slot_dst_addr_65: Int
+    rx_update_device_ring_slot_dst_addr_65 := rx_update_device_ring_slot_descr_61 +
+      rx_update_device_ring_slot_idx_62 * 8
+    {
+      var rx_update_device_ring_slot_stat_66: Int
+      rx_update_device_ring_slot_stat_66 := bv64_to_int(bv64_shl(bv64_from_int(1),
+        bv64_from_int(15)))
+      if ((rx_update_device_ring_slot_idx_62 + 1 ==
+      rx_update_device_ring_slot_hw_capacity_64 ?
+        1 :
+        0) !=
+      0) {
+        rx_update_device_ring_slot_stat_66 := bv64_to_int(bv64_or(bv64_from_int(rx_update_device_ring_slot_stat_66),
+          bv64_from_int(bv64_to_int(bv64_shl(bv64_from_int(1), bv64_from_int(13))))))
+      }
+      {
+        var rx_update_device_ring_slot_io_or_offset_67: Int
+        rx_update_device_ring_slot_io_or_offset_67 := slot(rx_update_device_ring_slot_net_buffer_63,
+          0).heap_elem
+        {
+          var rx_update_device_ring_slot_len_68: Int
+          rx_update_device_ring_slot_len_68 := slot(rx_update_device_ring_slot_net_buffer_63,
+            1).heap_elem
+          {
+            var rx_update_device_ring_slot_descriptor_69: Int
+            rx_update_device_ring_slot_descriptor_69 := bv64_to_int(bv64_or(bv64_from_int(bv64_to_int(bv64_shl(bv64_from_int(rx_update_device_ring_slot_stat_66),
+              bv64_from_int(16)))), bv64_from_int(rx_update_device_ring_slot_len_68)))
+            shared_store(rx_update_device_ring_slot_dst_addr_65 + 4, rx_update_device_ring_slot_io_or_offset_67)
+            shared_store(rx_update_device_ring_slot_dst_addr_65, rx_update_device_ring_slot_descriptor_69)
+            retval := 0
+            goto return_label
+          }
+        }
+      }
+    }
+  }
+  label return_label
+  refute false
+}
+
+method f_tx_update_device_ring_slot(heap: IArray, arg_descr: Int, arg_idx: Int,
+  arg_net_buffer: IArray, arg_hw_capacity: Int)
+  returns (retval: Int)
+  requires alen(heap) == 16384
+  requires alen(arg_net_buffer) == 2 &&
+    (forall j: Int ::0 <= 0 && 0 <= j &&
+      (j < 0 + 2 && 0 + 2 <= alen(arg_net_buffer)) ==>
+      acc(slot(arg_net_buffer, j).heap_elem, write))
+{
+  var tx_update_device_ring_slot_descr_70: Int
+  var tx_update_device_ring_slot_idx_71: Int
+  var tx_update_device_ring_slot_net_buffer_72: IArray
+  var tx_update_device_ring_slot_hw_capacity_73: Int
+  tx_update_device_ring_slot_descr_70 := arg_descr
+  tx_update_device_ring_slot_idx_71 := arg_idx
+  tx_update_device_ring_slot_net_buffer_72 := arg_net_buffer
+  tx_update_device_ring_slot_hw_capacity_73 := arg_hw_capacity
+  {
+    var tx_update_device_ring_slot_dst_addr_74: Int
+    tx_update_device_ring_slot_dst_addr_74 := tx_update_device_ring_slot_descr_70 +
+      tx_update_device_ring_slot_idx_71 * 8
+    {
+      var tx_update_device_ring_slot_stat_75: Int
+      tx_update_device_ring_slot_stat_75 := bv64_to_int(bv64_or(bv64_from_int(bv64_to_int(bv64_or(bv64_from_int(bv64_to_int(bv64_shl(bv64_from_int(1),
+        bv64_from_int(15)))), bv64_from_int(bv64_to_int(bv64_shl(bv64_from_int(1),
+        bv64_from_int(10))))))), bv64_from_int(bv64_to_int(bv64_shl(bv64_from_int(1),
+        bv64_from_int(11))))))
+      if ((tx_update_device_ring_slot_idx_71 + 1 ==
+      tx_update_device_ring_slot_hw_capacity_73 ?
+        1 :
+        0) !=
+      0) {
+        tx_update_device_ring_slot_stat_75 := bv64_to_int(bv64_or(bv64_from_int(tx_update_device_ring_slot_stat_75),
+          bv64_from_int(bv64_to_int(bv64_shl(bv64_from_int(1), bv64_from_int(13))))))
+      }
+      {
+        var tx_update_device_ring_slot_io_or_offset_76: Int
+        tx_update_device_ring_slot_io_or_offset_76 := slot(tx_update_device_ring_slot_net_buffer_72,
+          0).heap_elem
+        {
+          var tx_update_device_ring_slot_len_77: Int
+          tx_update_device_ring_slot_len_77 := slot(tx_update_device_ring_slot_net_buffer_72,
+            1).heap_elem
+          {
+            var tx_update_device_ring_slot_descriptor_78: Int
+            tx_update_device_ring_slot_descriptor_78 := bv64_to_int(bv64_or(bv64_from_int(bv64_to_int(bv64_shl(bv64_from_int(tx_update_device_ring_slot_stat_75),
+              bv64_from_int(16)))), bv64_from_int(tx_update_device_ring_slot_len_77)))
+            shared_store(tx_update_device_ring_slot_dst_addr_74 + 4, tx_update_device_ring_slot_io_or_offset_76)
+            shared_store(tx_update_device_ring_slot_dst_addr_74, tx_update_device_ring_slot_descriptor_78)
+            retval := 0
+            goto return_label
+          }
+        }
+      }
+    }
+  }
+  label return_label
+  refute false
+}
+
+method f_hw_queue_empty(heap: IArray, arg_ring: IArray)
+  returns (retval: Int)
+  requires alen(heap) == 16384
+  requires alen(arg_ring) == 3 &&
+    (forall j: Int ::0 <= 0 && 0 <= j &&
+      (j < 0 + 3 && 0 + 3 <= alen(arg_ring)) ==>
+      acc(slot(arg_ring, j).heap_elem, write))
+  ensures retval == 0 || retval == 1
+{
+  var hw_queue_empty_ring_79: IArray
+  hw_queue_empty_ring_79 := arg_ring
+  // annotation pushed
+  {
+    var hw_queue_empty_tail_80: Int
+    hw_queue_empty_tail_80 := slot(hw_queue_empty_ring_79, 0).heap_elem
+    {
+      var hw_queue_empty_head_81: Int
+      hw_queue_empty_head_81 := slot(hw_queue_empty_ring_79, 1).heap_elem
+      retval := (hw_queue_empty_head_81 == hw_queue_empty_tail_80 ? 1 : 0)
+      goto return_label
+    }
+  }
+  label return_label
+  refute false
+}
+
+method f_hw_queue_full(heap: IArray, arg_ring: IArray)
+  returns (retval: Int)
+  requires alen(heap) == 16384
+  requires alen(arg_ring) == 3 &&
+    (forall j: Int ::0 <= 0 && 0 <= j &&
+      (j < 0 + 3 && 0 + 3 <= alen(arg_ring)) ==>
+      acc(slot(arg_ring, j).heap_elem, write))
+  ensures retval == 0 || retval == 1
+{
+  var hw_queue_full_ring_82: IArray
+  hw_queue_full_ring_82 := arg_ring
+  // annotation pushed
+  {
+    var hw_queue_full_tail_83: Int
+    hw_queue_full_tail_83 := slot(hw_queue_full_ring_82, 0).heap_elem
+    {
+      var hw_queue_full_head_84: Int
+      hw_queue_full_head_84 := slot(hw_queue_full_ring_82, 1).heap_elem
+      {
+        var hw_queue_full_length_85: Int
+        hw_queue_full_length_85 := slot(hw_queue_full_ring_82, 2).heap_elem
+        retval := (hw_queue_full_tail_83 - hw_queue_full_head_84 ==
+          hw_queue_full_length_85 ?
+            1 :
+            0)
+        goto return_label
+      }
+    }
+  }
+  label return_label
+  refute false
+}
+
+method f_hw_enqueue(heap: IArray, arg_ring: IArray) returns (retval: Int)
+  requires alen(heap) == 16384
+  requires alen(arg_ring) == 3 &&
+    (forall j: Int ::0 <= 0 && 0 <= j &&
+      (j < 0 + 3 && 0 + 3 <= alen(arg_ring)) ==>
+      acc(slot(arg_ring, j).heap_elem, write))
+  ensures retval == 0 || retval == -1
+{
+  var hw_enqueue_ring_86: IArray
+  hw_enqueue_ring_86 := arg_ring
+  // annotation pushed
+  {
+    var hw_enqueue_full_87: Int
+    var fr_89: IArray
+    var fr_88: Int
+    fr_89 := create_slice(hw_enqueue_ring_86, 0, 3)
+    fr_88 := f_hw_queue_full(heap, fr_89)
+    hw_enqueue_full_87 := fr_88
+    if (hw_enqueue_full_87 != 0) {
+      retval := -1
+      goto return_label
+    }
+    {
+      var hw_enqueue_tail_90: Int
+      hw_enqueue_tail_90 := slot(hw_enqueue_ring_86, 0).heap_elem
+      hw_enqueue_tail_90 := hw_enqueue_tail_90 + 1
+      retval := 0
+      goto return_label
+    }
+  }
+  label return_label
+  refute false
+}
+
+method f_rx_return(heap: IArray) returns (retval: Int)
+  requires alen(heap) == 16384
+{
+  {
+    var rx_return_packets_transferred_91: Int
+    rx_return_packets_transferred_91 := 0
+    {
+      var rx_return_rx_queue_92: IArray
+      var fr_93: IArray
+      assert (0 + 1 * 8) % 8 == 0
+      fr_93 := create_slice(heap, (0 + 1 * 8) / 8, 3)
+      rx_return_rx_queue_92 := fr_93
+      {
+        var rx_return_rx_active_94: Int
+        rx_return_rx_active_94 := slot(rx_return_rx_queue_92, 1).heap_elem
+        {
+          var rx_return_capacity_95: Int
+          rx_return_capacity_95 := slot(rx_return_rx_queue_92, 2).heap_elem
+          while (1 != 0) {
+            {
+              var rx_return_hw_ring_rx_96: IArray
+              var fr_97: IArray
+              assert (0 + 7 * 8) % 8 == 0
+              fr_97 := create_slice(heap, (0 + 7 * 8) / 8, 3)
+              rx_return_hw_ring_rx_96 := fr_97
+              {
+                var rx_return_empty_98: Int
+                var fr_100: IArray
+                var fr_99: Int
+                fr_100 := create_slice(rx_return_hw_ring_rx_96, 0, 3)
+                fr_99 := f_hw_queue_empty(heap, fr_100)
+                rx_return_empty_98 := fr_99
+                if (rx_return_empty_98 != 0) {
+                  goto break_label_0
+                }
+                {
+                  var rx_return_hw_head_101: Int
+                  rx_return_hw_head_101 := slot(rx_return_hw_ring_rx_96, 1).heap_elem
+                  {
+                    var rx_return_hw_capacity_102: Int
+                    rx_return_hw_capacity_102 := slot(rx_return_hw_ring_rx_96,
+                      2).heap_elem
+                    {
+                      var rx_return_idx_103: Int
+                      var fr_104: Int
+                      fr_104 := f_pnk_modulo(heap, rx_return_hw_head_101, rx_return_hw_capacity_102)
+                      rx_return_idx_103 := fr_104
+                      {
+                        var rx_return_dscr_addr_105: Int
+                        assert (0 + 10 * 8) % 8 == 0
+                        rx_return_dscr_addr_105 := slot(heap, (0 + 10 * 8) /
+                          8).heap_elem +
+                          rx_return_idx_103 * 8
+                        {
+                          var rx_return_descriptor_106: Int
+                          rx_return_descriptor_106 := 0
+                          rx_return_descriptor_106 := shared_load(rx_return_dscr_addr_105)
+                          {
+                            var rx_return_not_received_107: Int
+                            var fr_108: Int
+                            fr_108 := f_rx_descriptor_empty(heap, rx_return_descriptor_106)
+                            rx_return_not_received_107 := fr_108
+                            if (rx_return_not_received_107 != 0) {
+                              goto break_label_0
+                            }
+                            {
+                              var rx_return_mdata_buff_109: Int
+                              rx_return_mdata_buff_109 := 0 + 15 * 8 +
+                                rx_return_idx_103 * (2 * 8)
+                              {
+                                var rx_return_len_110: Int
+                                var fr_111: Int
+                                fr_111 := f_descriptor_get_len(heap, rx_return_descriptor_106)
+                                rx_return_len_110 := fr_111
+                                assert (rx_return_mdata_buff_109 + 8) % 8 ==
+                                  0
+                                slot(heap, (rx_return_mdata_buff_109 + 8) /
+                                8).heap_elem := rx_return_len_110
+                                {
+                                  var rx_return_err_112: Int
+                                  var fr_113: Int
+                                  fr_113 := f_net_enqueue(heap, rx_return_rx_active_94,
+                                    rx_return_capacity_95, rx_return_mdata_buff_109)
+                                  rx_return_err_112 := fr_113
+                                  rx_return_packets_transferred_91 := 1
+                                  rx_return_hw_head_101 := rx_return_hw_head_101 +
+                                    1
+                                  {
+                                    var rx_return_hw_tail_114: Int
+                                    rx_return_hw_tail_114 := slot(rx_return_hw_ring_rx_96,
+                                      0).heap_elem
+                                    {
+                                      var fr_115: IArray
+                                      inhale alen(fr_115) == 2
+                                      inhale (forall j: Int ::0 <= 0 &&
+                                          0 <= j &&
+                                          (j < 0 + alen(fr_115) &&
+                                          0 + alen(fr_115) <= alen(fr_115)) ==>
+                                          acc(slot(fr_115, j).heap_elem, write))
+                                      slot(fr_115, 0).heap_elem := rx_return_hw_tail_114
+                                      slot(fr_115, 1).heap_elem := rx_return_hw_head_101
+                                      assert (0 + 7 * 8) % 8 == 0
+                                      copy_slice(fr_115, 0, heap, (0 +
+                                        7 * 8) /
+                                        8, 2)
+                                    }
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+            label continue_label_0
+          }
+          label break_label_0
+          {
+            var rx_return_signal_116: Int
+            var fr_117: Int
+            fr_117 := f_net_require_signal(heap, rx_return_rx_active_94)
+            rx_return_signal_116 := fr_117
+            if (bv64_to_int(bv64_and(bv64_from_int((0 !=
+            rx_return_packets_transferred_91 ?
+              1 :
+              0)), bv64_from_int((0 != rx_return_signal_116 ? 1 : 0)))) !=
+            0) {
+              {
+                var rx_return_fr_118_119: Int
+                var fr_120: Int
+                fr_120 := f_net_cancel_signal(heap, rx_return_rx_active_94)
+                rx_return_fr_118_119 := fr_120
+                // skip
+              }
+              ffi_microkit_notify(0, 2, 0, 0)
+            }
+            retval := 0
+            goto return_label
+          }
+        }
+      }
+    }
+  }
+  label return_label
+  refute false
+}
+
+method f_rx_provide(heap: IArray) returns (retval: Int)
+  requires alen(heap) == 16384
+{
+  {
+    var rx_provide_reprocess_121: Int
+    rx_provide_reprocess_121 := 1
+    {
+      var rx_provide_rx_queue_122: IArray
+      var fr_123: IArray
+      assert (0 + 1 * 8) % 8 == 0
+      fr_123 := create_slice(heap, (0 + 1 * 8) / 8, 3)
+      rx_provide_rx_queue_122 := fr_123
+      {
+        var rx_provide_rx_free_124: Int
+        rx_provide_rx_free_124 := slot(rx_provide_rx_queue_122, 0).heap_elem
+        {
+          var rx_provide_capacity_125: Int
+          rx_provide_capacity_125 := slot(rx_provide_rx_queue_122, 2).heap_elem
+          {
+            var rx_provide_eth_126: Int
+            assert 0 % 8 == 0
+            rx_provide_eth_126 := slot(heap, 0 / 8).heap_elem
+            while (rx_provide_reprocess_121 != 0) {
+              while (1 != 0) {
+                {
+                  var rx_provide_hw_ring_rx_127: IArray
+                  var fr_128: IArray
+                  assert (0 + 7 * 8) % 8 == 0
+                  fr_128 := create_slice(heap, (0 + 7 * 8) / 8, 3)
+                  rx_provide_hw_ring_rx_127 := fr_128
+                  {
+                    var rx_provide_empty_129: Int
+                    var fr_130: Int
+                    fr_130 := f_net_queue_empty(heap, rx_provide_rx_free_124)
+                    rx_provide_empty_129 := fr_130
+                    {
+                      var rx_provide_full_131: Int
+                      var fr_133: IArray
+                      var fr_132: Int
+                      fr_133 := create_slice(rx_provide_hw_ring_rx_127, 0, 3)
+                      fr_132 := f_hw_queue_full(heap, fr_133)
+                      rx_provide_full_131 := fr_132
+                      if ((0 !=
+                      bv64_to_int(bv64_or(bv64_from_int(rx_provide_full_131),
+                      bv64_from_int(rx_provide_empty_129))) ?
+                        1 :
+                        0) !=
+                      0) {
+                        goto break_label_1
+                      }
+                      {
+                        var rx_provide_temp_addr_134: Int
+                        rx_provide_temp_addr_134 := 0 + 1040 * 8
+                        {
+                          var rx_provide_ret_135: Int
+                          var fr_136: Int
+                          fr_136 := f_net_dequeue(heap, rx_provide_rx_free_124,
+                            rx_provide_capacity_125, rx_provide_temp_addr_134)
+                          rx_provide_ret_135 := fr_136
+                          {
+                            var rx_provide_net_buffer_137: IArray
+                            var fr_138: IArray
+                            assert rx_provide_temp_addr_134 % 8 == 0
+                            fr_138 := create_slice(heap, rx_provide_temp_addr_134 /
+                              8, 2)
+                            rx_provide_net_buffer_137 := fr_138
+                            {
+                              var rx_provide_hw_tail_139: Int
+                              rx_provide_hw_tail_139 := slot(rx_provide_hw_ring_rx_127,
+                                0).heap_elem
+                              {
+                                var rx_provide_hw_capacity_140: Int
+                                rx_provide_hw_capacity_140 := slot(rx_provide_hw_ring_rx_127,
+                                  2).heap_elem
+                                {
+                                  var rx_provide_idx_141: Int
+                                  var fr_142: Int
+                                  fr_142 := f_pnk_modulo(heap, rx_provide_hw_tail_139,
+                                    rx_provide_hw_capacity_140)
+                                  rx_provide_idx_141 := fr_142
+                                  {
+                                    var rx_provide_mdata_buff_143: Int
+                                    rx_provide_mdata_buff_143 := 0 + 15 * 8 +
+                                      rx_provide_idx_141 * (2 * 8)
+                                    assert rx_provide_mdata_buff_143 % 8 ==
+                                      0
+                                    copy_slice(rx_provide_net_buffer_137, 0,
+                                      heap, rx_provide_mdata_buff_143 / 8, 2)
+                                    {
+                                      var rx_provide_fr_144_145: Int
+                                      var fr_147: IArray
+                                      var fr_146: Int
+                                      assert (0 + 10 * 8) % 8 == 0
+                                      fr_147 := create_slice(rx_provide_net_buffer_137,
+                                        0, 2)
+                                      fr_146 := f_rx_update_device_ring_slot(heap,
+                                        slot(heap, (0 + 10 * 8) / 8).heap_elem,
+                                        rx_provide_idx_141, fr_147, rx_provide_hw_capacity_140)
+                                      rx_provide_fr_144_145 := fr_146
+                                      // skip
+                                    }
+                                    rx_provide_hw_tail_139 := rx_provide_hw_tail_139 +
+                                      1
+                                    {
+                                      var rx_provide_hw_head_148: Int
+                                      rx_provide_hw_head_148 := slot(rx_provide_hw_ring_rx_127,
+                                        1).heap_elem
+                                      {
+                                        var fr_149: IArray
+                                        inhale alen(fr_149) == 2
+                                        inhale (forall j: Int ::0 <= 0 &&
+                                            0 <= j &&
+                                            (j < 0 + alen(fr_149) &&
+                                            0 + alen(fr_149) <=
+                                            alen(fr_149)) ==>
+                                            acc(slot(fr_149, j).heap_elem, write))
+                                        slot(fr_149, 0).heap_elem := rx_provide_hw_tail_139
+                                        slot(fr_149, 1).heap_elem := rx_provide_hw_head_148
+                                        assert (0 + 7 * 8) % 8 == 0
+                                        copy_slice(fr_149, 0, heap, (0 +
+                                          7 * 8) /
+                                          8, 2)
+                                      }
+                                      {
+                                        var rx_provide_fr_150_151: Int
+                                        var fr_152: Int
+                                        fr_152 := f_set_device_RDAR(heap)
+                                        rx_provide_fr_150_151 := fr_152
+                                        // skip
+                                      }
+                                    }
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+                label continue_label_1
+              }
+              label break_label_1
+              {
+                var rx_provide_hw_ring_rx_153: IArray
+                var fr_154: IArray
+                assert (0 + 7 * 8) % 8 == 0
+                fr_154 := create_slice(heap, (0 + 7 * 8) / 8, 3)
+                rx_provide_hw_ring_rx_153 := fr_154
+                {
+                  var rx_provide_full_155: Int
+                  var fr_157: IArray
+                  var fr_156: Int
+                  fr_157 := create_slice(rx_provide_hw_ring_rx_153, 0, 3)
+                  fr_156 := f_hw_queue_full(heap, fr_157)
+                  rx_provide_full_155 := fr_156
+                  if ((0 == rx_provide_full_155 ? 1 : 0) != 0) {
+                    {
+                      var rx_provide_fr_158_159: Int
+                      var fr_160: Int
+                      fr_160 := f_net_request_signal(heap, rx_provide_rx_free_124)
+                      rx_provide_fr_158_159 := fr_160
+                      // skip
+                    }
+                  } else {
+                    var rx_provide_fr_161_162: Int
+                    var fr_163: Int
+                    fr_163 := f_net_cancel_signal(heap, rx_provide_rx_free_124)
+                    rx_provide_fr_161_162 := fr_163
+                    // skip
+                  }
+                  rx_provide_reprocess_121 := 0
+                  {
+                    var rx_provide_empty_164: Int
+                    var fr_165: Int
+                    fr_165 := f_net_queue_empty(heap, rx_provide_rx_free_124)
+                    rx_provide_empty_164 := fr_165
+                    if (bv64_to_int(bv64_and(bv64_from_int((0 !=
+                    (0 == rx_provide_empty_164 ? 1 : 0) ?
+                      1 :
+                      0)), bv64_from_int((0 !=
+                    (0 == rx_provide_full_155 ? 1 : 0) ?
+                      1 :
+                      0)))) !=
+                    0) {
+                      {
+                        var rx_provide_fr_166_167: Int
+                        var fr_168: Int
+                        fr_168 := f_net_cancel_signal(heap, rx_provide_rx_free_124)
+                        rx_provide_fr_166_167 := fr_168
+                        // skip
+                      }
+                      rx_provide_reprocess_121 := 1
+                    }
+                  }
+                }
+              }
+              label continue_label_0
+            }
+            label break_label_0
+            retval := 0
+            goto return_label
+          }
+        }
+      }
+    }
+  }
+  label return_label
+  refute false
+}
+
+method f_tx_provide(heap: IArray) returns (retval: Int)
+  requires alen(heap) == 16384
+{
+  {
+    var tx_provide_reprocess_169: Int
+    tx_provide_reprocess_169 := 1
+    {
+      var tx_provide_tx_queue_170: IArray
+      var fr_171: IArray
+      assert (0 + 4 * 8) % 8 == 0
+      fr_171 := create_slice(heap, (0 + 4 * 8) / 8, 3)
+      tx_provide_tx_queue_170 := fr_171
+      {
+        var tx_provide_tx_active_172: Int
+        tx_provide_tx_active_172 := slot(tx_provide_tx_queue_170, 1).heap_elem
+        {
+          var tx_provide_capacity_173: Int
+          tx_provide_capacity_173 := slot(tx_provide_tx_queue_170, 2).heap_elem
+          {
+            var tx_provide_eth_174: Int
+            assert 0 % 8 == 0
+            tx_provide_eth_174 := slot(heap, 0 / 8).heap_elem
+            while (tx_provide_reprocess_169 != 0) {
+              while (1 != 0) {
+                {
+                  var tx_provide_hw_ring_tx_175: IArray
+                  var fr_176: IArray
+                  assert (0 + 7 * 8 + 4 * 8) % 8 == 0
+                  fr_176 := create_slice(heap, (0 + 7 * 8 + 4 * 8) / 8, 3)
+                  tx_provide_hw_ring_tx_175 := fr_176
+                  {
+                    var tx_provide_empty_177: Int
+                    var fr_178: Int
+                    fr_178 := f_net_queue_empty(heap, tx_provide_tx_active_172)
+                    tx_provide_empty_177 := fr_178
+                    {
+                      var tx_provide_full_179: Int
+                      var fr_181: IArray
+                      var fr_180: Int
+                      fr_181 := create_slice(tx_provide_hw_ring_tx_175, 0, 3)
+                      fr_180 := f_hw_queue_full(heap, fr_181)
+                      tx_provide_full_179 := fr_180
+                      if ((0 !=
+                      bv64_to_int(bv64_or(bv64_from_int(tx_provide_full_179),
+                      bv64_from_int(tx_provide_empty_177))) ?
+                        1 :
+                        0) !=
+                      0) {
+                        goto break_label_1
+                      }
+                      {
+                        var tx_provide_temp_addr_182: Int
+                        tx_provide_temp_addr_182 := 0 + 1040 * 8
+                        {
+                          var tx_provide_ret_183: Int
+                          var fr_184: Int
+                          fr_184 := f_net_dequeue(heap, tx_provide_tx_active_172,
+                            tx_provide_capacity_173, tx_provide_temp_addr_182)
+                          tx_provide_ret_183 := fr_184
+                          {
+                            var tx_provide_net_buffer_185: IArray
+                            var fr_186: IArray
+                            assert tx_provide_temp_addr_182 % 8 == 0
+                            fr_186 := create_slice(heap, tx_provide_temp_addr_182 /
+                              8, 2)
+                            tx_provide_net_buffer_185 := fr_186
+                            {
+                              var tx_provide_hw_tail_187: Int
+                              tx_provide_hw_tail_187 := slot(tx_provide_hw_ring_tx_175,
+                                0).heap_elem
+                              {
+                                var tx_provide_hw_capacity_188: Int
+                                tx_provide_hw_capacity_188 := slot(tx_provide_hw_ring_tx_175,
+                                  2).heap_elem
+                                {
+                                  var tx_provide_idx_189: Int
+                                  var fr_190: Int
+                                  fr_190 := f_pnk_modulo(heap, tx_provide_hw_tail_187,
+                                    tx_provide_hw_capacity_188)
+                                  tx_provide_idx_189 := fr_190
+                                  {
+                                    var tx_provide_mdata_buff_191: Int
+                                    tx_provide_mdata_buff_191 := 0 +
+                                      527 * 8 +
+                                      tx_provide_idx_189 * (2 * 8)
+                                    assert tx_provide_mdata_buff_191 % 8 ==
+                                      0
+                                    copy_slice(tx_provide_net_buffer_185, 0,
+                                      heap, tx_provide_mdata_buff_191 / 8, 2)
+                                    {
+                                      var tx_provide_fr_192_193: Int
+                                      var fr_195: IArray
+                                      var fr_194: Int
+                                      assert (0 + 14 * 8) % 8 == 0
+                                      fr_195 := create_slice(tx_provide_net_buffer_185,
+                                        0, 2)
+                                      fr_194 := f_tx_update_device_ring_slot(heap,
+                                        slot(heap, (0 + 14 * 8) / 8).heap_elem,
+                                        tx_provide_idx_189, fr_195, tx_provide_hw_capacity_188)
+                                      tx_provide_fr_192_193 := fr_194
+                                      // skip
+                                    }
+                                    tx_provide_hw_tail_187 := tx_provide_hw_tail_187 +
+                                      1
+                                    {
+                                      var tx_provide_hw_head_196: Int
+                                      tx_provide_hw_head_196 := slot(tx_provide_hw_ring_tx_175,
+                                        1).heap_elem
+                                      {
+                                        var fr_197: IArray
+                                        inhale alen(fr_197) == 2
+                                        inhale (forall j: Int ::0 <= 0 &&
+                                            0 <= j &&
+                                            (j < 0 + alen(fr_197) &&
+                                            0 + alen(fr_197) <=
+                                            alen(fr_197)) ==>
+                                            acc(slot(fr_197, j).heap_elem, write))
+                                        slot(fr_197, 0).heap_elem := tx_provide_hw_tail_187
+                                        slot(fr_197, 1).heap_elem := tx_provide_hw_head_196
+                                        assert (0 + 7 * 8 + 4 * 8) % 8 == 0
+                                        copy_slice(fr_197, 0, heap, (0 +
+                                          7 * 8 +
+                                          4 * 8) /
+                                          8, 2)
+                                      }
+                                      {
+                                        var tx_provide_fr_198_199: Int
+                                        var fr_200: Int
+                                        fr_200 := f_set_device_TDAR(heap)
+                                        tx_provide_fr_198_199 := fr_200
+                                        // skip
+                                      }
+                                    }
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+                label continue_label_1
+              }
+              label break_label_1
+              {
+                var tx_provide_fr_201_202: Int
+                var fr_203: Int
+                fr_203 := f_net_request_signal(heap, tx_provide_tx_active_172)
+                tx_provide_fr_201_202 := fr_203
+                // skip
+              }
+              tx_provide_reprocess_169 := 0
+              {
+                var tx_provide_hw_ring_tx_204: IArray
+                var fr_205: IArray
+                assert (0 + 7 * 8 + 4 * 8) % 8 == 0
+                fr_205 := create_slice(heap, (0 + 7 * 8 + 4 * 8) / 8, 3)
+                tx_provide_hw_ring_tx_204 := fr_205
+                {
+                  var tx_provide_full_206: Int
+                  var fr_208: IArray
+                  var fr_207: Int
+                  fr_208 := create_slice(tx_provide_hw_ring_tx_204, 0, 3)
+                  fr_207 := f_hw_queue_full(heap, fr_208)
+                  tx_provide_full_206 := fr_207
+                  {
+                    var tx_provide_empty_209: Int
+                    var fr_210: Int
+                    fr_210 := f_net_queue_empty(heap, tx_provide_tx_active_172)
+                    tx_provide_empty_209 := fr_210
+                    if (bv64_to_int(bv64_and(bv64_from_int((0 !=
+                    (0 == tx_provide_full_206 ? 1 : 0) ?
+                      1 :
+                      0)), bv64_from_int((0 !=
+                    (0 == tx_provide_empty_209 ? 1 : 0) ?
+                      1 :
+                      0)))) !=
+                    0) {
+                      {
+                        var tx_provide_fr_211_212: Int
+                        var fr_213: Int
+                        fr_213 := f_net_cancel_signal(heap, tx_provide_tx_active_172)
+                        tx_provide_fr_211_212 := fr_213
+                        // skip
+                      }
+                      tx_provide_reprocess_169 := 1
+                    }
+                  }
+                }
+              }
+              label continue_label_0
+            }
+            label break_label_0
+            retval := 0
+            goto return_label
+          }
+        }
+      }
+    }
+  }
+  label return_label
+  refute false
+}
+
+method f_tx_return(heap: IArray) returns (retval: Int)
+  requires alen(heap) == 16384
+{
+  {
+    var tx_return_enqueued_214: Int
+    tx_return_enqueued_214 := 0
+    {
+      var tx_return_tx_queue_215: IArray
+      var fr_216: IArray
+      assert (0 + 4 * 8) % 8 == 0
+      fr_216 := create_slice(heap, (0 + 4 * 8) / 8, 3)
+      tx_return_tx_queue_215 := fr_216
+      {
+        var tx_return_tx_free_217: Int
+        tx_return_tx_free_217 := slot(tx_return_tx_queue_215, 0).heap_elem
+        {
+          var tx_return_capacity_218: Int
+          tx_return_capacity_218 := slot(tx_return_tx_queue_215, 2).heap_elem
+          while (1 != 0) {
+            {
+              var tx_return_hw_ring_tx_219: IArray
+              var fr_220: IArray
+              assert (0 + 7 * 8 + 4 * 8) % 8 == 0
+              fr_220 := create_slice(heap, (0 + 7 * 8 + 4 * 8) / 8, 3)
+              tx_return_hw_ring_tx_219 := fr_220
+              {
+                var tx_return_empty_221: Int
+                var fr_223: IArray
+                var fr_222: Int
+                fr_223 := create_slice(tx_return_hw_ring_tx_219, 0, 3)
+                fr_222 := f_hw_queue_empty(heap, fr_223)
+                tx_return_empty_221 := fr_222
+                if (tx_return_empty_221 != 0) {
+                  goto break_label_0
+                }
+                {
+                  var tx_return_hw_head_224: Int
+                  tx_return_hw_head_224 := slot(tx_return_hw_ring_tx_219, 1).heap_elem
+                  {
+                    var tx_return_hw_capacity_225: Int
+                    tx_return_hw_capacity_225 := slot(tx_return_hw_ring_tx_219,
+                      2).heap_elem
+                    {
+                      var tx_return_idx_226: Int
+                      var fr_227: Int
+                      fr_227 := f_pnk_modulo(heap, tx_return_hw_head_224, slot(tx_return_hw_ring_tx_219,
+                        2).heap_elem)
+                      tx_return_idx_226 := fr_227
+                      {
+                        var tx_return_dscr_addr_228: Int
+                        assert (0 + 14 * 8) % 8 == 0
+                        tx_return_dscr_addr_228 := slot(heap, (0 + 14 * 8) /
+                          8).heap_elem +
+                          tx_return_idx_226 * 8
+                        {
+                          var tx_return_descriptor_229: Int
+                          tx_return_descriptor_229 := 0
+                          tx_return_descriptor_229 := shared_load(tx_return_dscr_addr_228)
+                          {
+                            var tx_return_not_sent_230: Int
+                            var fr_231: Int
+                            fr_231 := f_tx_descriptor_ready(heap, tx_return_descriptor_229)
+                            tx_return_not_sent_230 := fr_231
+                            if (tx_return_not_sent_230 != 0) {
+                              goto break_label_0
+                            }
+                            {
+                              var tx_return_mdata_buff_232: Int
+                              tx_return_mdata_buff_232 := 0 + 527 * 8 +
+                                tx_return_idx_226 * (2 * 8)
+                              assert (tx_return_mdata_buff_232 + 8) % 8 ==
+                                0
+                              slot(heap, (tx_return_mdata_buff_232 + 8) / 8).heap_elem := 0
+                              {
+                                var tx_return_err_233: Int
+                                var fr_234: Int
+                                fr_234 := f_net_enqueue(heap, tx_return_tx_free_217,
+                                  tx_return_capacity_218, tx_return_mdata_buff_232)
+                                tx_return_err_233 := fr_234
+                                tx_return_enqueued_214 := 1
+                                tx_return_hw_head_224 := tx_return_hw_head_224 +
+                                  1
+                                {
+                                  var tx_return_hw_tail_235: Int
+                                  tx_return_hw_tail_235 := slot(tx_return_hw_ring_tx_219,
+                                    0).heap_elem
+                                  {
+                                    var fr_236: IArray
+                                    inhale alen(fr_236) == 2
+                                    inhale (forall j: Int ::0 <= 0 &&
+                                        0 <= j &&
+                                        (j < 0 + alen(fr_236) &&
+                                        0 + alen(fr_236) <= alen(fr_236)) ==>
+                                        acc(slot(fr_236, j).heap_elem, write))
+                                    slot(fr_236, 0).heap_elem := tx_return_hw_tail_235
+                                    slot(fr_236, 1).heap_elem := tx_return_hw_head_224
+                                    assert (0 + 7 * 8 + 4 * 8) % 8 == 0
+                                    copy_slice(fr_236, 0, heap, (0 + 7 * 8 +
+                                      4 * 8) /
+                                      8, 2)
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+            label continue_label_0
+          }
+          label break_label_0
+          {
+            var tx_return_signal_237: Int
+            var fr_238: Int
+            fr_238 := f_net_require_signal(heap, tx_return_tx_free_217)
+            tx_return_signal_237 := fr_238
+            if (bv64_to_int(bv64_and(bv64_from_int((0 !=
+            tx_return_enqueued_214 ?
+              1 :
+              0)), bv64_from_int((0 != tx_return_signal_237 ? 1 : 0)))) !=
+            0) {
+              {
+                var tx_return_fr_239_240: Int
+                var fr_241: Int
+                fr_241 := f_net_cancel_signal(heap, tx_return_tx_free_217)
+                tx_return_fr_239_240 := fr_241
+                // skip
+              }
+              ffi_microkit_notify(0, 1, 0, 0)
+            }
+            retval := 0
+            goto return_label
+          }
+        }
+      }
+    }
+  }
+  label return_label
+  refute false
+}
+
+method f_handle_irq(heap: IArray) returns (retval: Int)
+  requires alen(heap) == 16384
+{
+  {
+    var handle_irq_EIR_242: Int
+    var fr_243: Int
+    fr_243 := f_get_device_EIR(heap)
+    handle_irq_EIR_242 := fr_243
+    {
+      var handle_irq_fr_244_245: Int
+      var fr_246: Int
+      fr_246 := f_clear_device_EIR(heap)
+      handle_irq_fr_244_245 := fr_246
+      // skip
+    }
+    while (1 != 0) {
+      {
+        var handle_irq_rx_work_247: Int
+        var fr_248: Int
+        fr_248 := f_is_EIR_RXF(heap, handle_irq_EIR_242)
+        handle_irq_rx_work_247 := fr_248
+        {
+          var handle_irq_tx_work_249: Int
+          var fr_250: Int
+          fr_250 := f_is_EIR_TXF(heap, handle_irq_EIR_242)
+          handle_irq_tx_work_249 := fr_250
+          if (handle_irq_rx_work_247 != 0) {
+            {
+              var handle_irq_fr_251_252: Int
+              var fr_253: Int
+              fr_253 := f_rx_return(heap)
+              handle_irq_fr_251_252 := fr_253
+              // skip
+            }
+            {
+              var handle_irq_fr_254_255: Int
+              var fr_256: Int
+              fr_256 := f_rx_provide(heap)
+              handle_irq_fr_254_255 := fr_256
+              // skip
+            }
+          }
+          if (handle_irq_tx_work_249 != 0) {
+            {
+              var handle_irq_fr_257_258: Int
+              var fr_259: Int
+              fr_259 := f_tx_return(heap)
+              handle_irq_fr_257_258 := fr_259
+              // skip
+            }
+            {
+              var handle_irq_fr_260_261: Int
+              var fr_262: Int
+              fr_262 := f_tx_provide(heap)
+              handle_irq_fr_260_261 := fr_262
+              // skip
+            }
+          }
+          if (bv64_to_int(bv64_and(bv64_from_int((0 !=
+          (0 == handle_irq_rx_work_247 ? 1 : 0) ?
+            1 :
+            0)), bv64_from_int((0 != (0 == handle_irq_tx_work_249 ? 1 : 0) ?
+            1 :
+            0)))) !=
+          0) {
+            goto break_label_0
+          }
+          {
+            var fr_263: Int
+            fr_263 := f_get_device_EIR(heap)
+            handle_irq_EIR_242 := fr_263
+          }
+          {
+            var handle_irq_fr_264_265: Int
+            var fr_266: Int
+            fr_266 := f_clear_device_EIR(heap)
+            handle_irq_fr_264_265 := fr_266
+            // skip
+          }
+        }
+      }
+      label continue_label_0
+    }
+    label break_label_0
+    retval := 0
+    goto return_label
+  }
+  label return_label
+  refute false
+}
+
+method f_notified(heap: IArray, arg_channel: Int) returns (retval: Int)
+  requires alen(heap) == 16384
+{
+  var notified_channel_267: Int
+  notified_channel_267 := arg_channel
+  if ((notified_channel_267 == 0 ? 1 : 0) != 0) {
+    {
+      var notified_fr_268_269: Int
+      var fr_270: Int
+      fr_270 := f_handle_irq(heap)
+      notified_fr_268_269 := fr_270
+      // skip
+    }
+    ffi_microkit_deferred_irq_ack(0, notified_channel_267, 0, 0)
+    retval := 0
+    goto return_label
+  }
+  if ((notified_channel_267 == 2 ? 1 : 0) != 0) {
+    {
+      var notified_fr_271_272: Int
+      var fr_273: Int
+      fr_273 := f_rx_provide(heap)
+      notified_fr_271_272 := fr_273
+      // skip
+    }
+    retval := 0
+    goto return_label
+  }
+  if ((notified_channel_267 == 1 ? 1 : 0) != 0) {
+    {
+      var notified_fr_274_275: Int
+      var fr_276: Int
+      fr_276 := f_tx_provide(heap)
+      notified_fr_274_275 := fr_276
+      // skip
+    }
+    retval := 0
+    goto return_label
+  }
+  retval := -1
+  goto return_label
+  label return_label
+  refute false
+}

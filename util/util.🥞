@@ -8,11 +8,23 @@
 #define BYTE_MASK       255
 #define HALF_BIW        (@biw >> 1)
 
-// Returns a % b, asuming b = x^n for some x and n
+// Returns a % b, asuming b = 2^n for some x and n
 fun pnk_modulo(1 a, 1 b) {
+    /*@ requires b != 0 @*/
+    /*@ ensures retval == (a % b) @*/
     var result = a & (b - 1);
+    /*@ inhale result == (a % b) @*/
     return result;
 }
+
+/* @ method ffimicrokit_notify(x1: Int, x2: Int, x3: Int, x4: Int)
+ @*/
+
+/* @ method ffimicrokit_deferred_irq_ack(x1: Int, x2: Int, x3: Int, x4: Int)
+ @*/
+
+/* @ method ffimicrokit_deferred_notify(x1: Int, x2: Int, x3: Int, x4: Int)
+ @*/
 
 #define microkit_notify(channel)        \
     @microkit_notify(0,channel,0,0);    \
